@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { GoogleButton } from "./google-button";
 
@@ -33,7 +34,10 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
         </ul>
         <p className="pt-1">
           MoneyMap is an independent prototype and is not affiliated with any bank or
-          payment app.
+          payment app.{" "}
+          <Link href="/privacy" className="text-accent underline">
+            Privacy policy
+          </Link>
         </p>
       </section>
     </main>
