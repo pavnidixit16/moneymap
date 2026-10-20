@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { readSupabaseEnv } from "@/lib/supabase/env";
 
 const PUBLIC_PATHS = ["/login", "/auth/", "/privacy"];
 
@@ -11,16 +12,15 @@ function isPublic(pathname: string) {
 // signed-out visitors to /login. This is a convenience redirect only; every page and
 // every database query still checks identity and row-level security on its own.
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) {
+  const env = readSupabaseEnv();
+  if (!env) {
     if (request.nextUrl.pathname === "/auth/error") return NextResponse.next();
     return NextResponse.redirect(new URL("/auth/error?reason=config", request.url));
   }
 
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(url, key, {
+  const supabase = createServerClient(env.url, env.key, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
