@@ -43,3 +43,7 @@ next-env.d.ts
 
 # local Supabase CLI state
 supabase/.temp
+
+# browser test output
+/test-results/
+/playwright-report/

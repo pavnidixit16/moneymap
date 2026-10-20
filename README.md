@@ -23,6 +23,8 @@ security) · Vercel · Vitest.
 | `src/lib/supabase` | Supabase clients (browser and server) |
 | `supabase/migrations` | Database schema, constraints and access policies, applied in order |
 | `supabase/tests` | Two-user isolation test (safe to run in the Supabase SQL Editor) |
+| `src/lib/engine` | Pure pay-cycle calculations (R1–R10) with unit tests |
+| `e2e` | Browser tests and the local test stack |
 | `scripts/check-secrets.sh` | Fails if a secret is in git, its history or the browser bundle |
 
 ## Commands
@@ -34,7 +36,11 @@ npm run typecheck      # TypeScript
 npm run lint           # ESLint
 npm run build          # production build
 npm run check:secrets  # secret scan (run after build to include the bundle)
+npm run test:e2e       # browser tests on a local stack (see e2e/local/run.sh)
 ```
+
+The browser tests run the real migrations in a local Postgres behind the real PostgREST
+server, with a small stand-in for Supabase Auth (`e2e/local/gateway.mjs`, local only).
 
 ## Security model
 

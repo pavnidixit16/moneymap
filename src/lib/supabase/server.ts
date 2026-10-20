@@ -1,9 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { supabaseEnv } from "./env";
 
 // Supabase client for Server Components, Server Actions and Route Handlers.
 export async function createClient() {
+  // Per-user data is always rendered at request time, never prerendered.
+  await connection();
   const cookieStore = await cookies();
   const { url, key } = supabaseEnv();
 
