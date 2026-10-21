@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/format";
 import { formatINR, paiseToInput } from "@/lib/money";
 import { cancelCommitment, deleteCommitment, reactivateCommitment } from "../actions";
 import { CommitmentForm } from "../commitment-form";
+import { PaymentControls } from "../settle-controls";
 
 const OUTCOME_LABELS = {
   paid: "Paid",
@@ -73,17 +74,42 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
         {payments.length === 0 ? (
           <p className="pt-2 text-sm text-muted">No payments recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-border">
-            {payments.map((p) => (
-              <li key={p.id} className="flex justify-between gap-3 py-2 text-sm">
-                <span>
-                  Due {formatDate(p.due_date)} · {OUTCOME_LABELS[p.outcome]}
-                  {p.paid_on && <span className="text-muted"> on {formatDate(p.paid_on)}</span>}
-                </span>
-                <span className="font-medium">{p.outcome === "paid" ? formatINR(p.amount_paise) : "—"}</span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="divide-y divide-border">
+              {payments.map((p, index) => {
+                // Only the latest record (by due date) can be undone, and only if the
+                // schedule hasn't been edited since it was recorded.
+                const isLatest = index === 0;
+                const scheduleEdited = Date.parse(p.created_at) < Date.parse(commitment.schedule_updated_at);
+                return (
+                  <li key={p.id} className="flex flex-col gap-1 py-2 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span>
+                        Due {formatDate(p.due_date)} · {OUTCOME_LABELS[p.outcome]}
+                        {p.paid_on && <span className="text-muted"> on {formatDate(p.paid_on)}</span>}
+                      </span>
+                      <span className="font-medium">{p.outcome === "paid" ? formatINR(p.amount_paise) : "—"}</span>
+                    </div>
+                    <PaymentControls
+                      key={`${p.id}-${p.amount_paise}-${p.paid_on}`}
+                      paymentId={p.id}
+                      isPaid={p.outcome === "paid"}
+                      amountPaise={p.amount_paise}
+                      paidOn={p.paid_on}
+                      canUndo={isLatest && !scheduleEdited}
+                      undoBlockedReason={
+                        isLatest && scheduleEdited ? "Recorded before the schedule was changed, so it can be edited but not undone." : undefined
+                      }
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="pt-2 text-xs text-muted">
+              Undo removes the latest payment and marks that bill unpaid again. To fix an older payment, edit its amount
+              or date.
+            </p>
+          </>
         )}
       </Card>
 

@@ -38,7 +38,7 @@ export async function saveCommitment(_prev: CommitmentFormState, formData: FormD
     : await supabase.from("commitments").insert(row);
 
   if (error) return { errors: { form: "Couldn't save. Please check the details and try again." } };
-  redirect("/commitments");
+  redirect("/commitments?tab=all");
 }
 
 async function setStatus(formData: FormData, status: "active" | "cancelled") {

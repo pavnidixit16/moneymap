@@ -11,6 +11,12 @@ function isoDaysFromToday(days: number) {
   return ist.toISOString().slice(0, 10);
 }
 
+// Open a page and wait until it is interactive before typing into its forms.
+async function open(page: Page, path: string) {
+  await page.goto(path);
+  await page.waitForLoadState("networkidle");
+}
+
 // Next.js keeps recently visited pages alive but hidden, so only match visible elements.
 const label = (page: Page, value: string | RegExp) => page.getByLabel(value).filter({ visible: true });
 const text = (page: Page, value: string | RegExp) => page.getByText(value).filter({ visible: true });
@@ -63,7 +69,7 @@ test("add, validate, edit, cancel, reactivate and delete a commitment", async ({
   await label(page, /Amount each time/).fill("22000");
   await label(page, "Next due date").fill(isoDaysFromToday(10));
   await page.getByRole("button", { name: "Add commitment" }).click();
-  await expect(page).toHaveURL(/\/commitments$/);
+  await expect(page).toHaveURL(/\/commitments\?tab=all$/);
   await expect(page.getByRole("link", { name: /Rent.*₹22,000/ })).toBeVisible();
 
   await page.getByRole("link", { name: /Rent.*₹22,000/ }).click();
@@ -86,13 +92,13 @@ test("add, validate, edit, cancel, reactivate and delete a commitment", async ({
 
 test("tracking-mode defaults: card is reminder-only, FD is info-only", async ({ page }) => {
   await signIn(page, "a");
-  await page.goto("/commitments/new?preset=card");
+  await open(page, "/commitments/new?preset=card");
   await expect(page.getByRole("radio", { name: /Reminder only/ })).toBeChecked();
   await label(page, "Next due date").fill(isoDaysFromToday(5));
   await page.getByRole("button", { name: "Add commitment" }).click();
   await expect(page.getByRole("link", { name: /Credit card bill.*Reminder only/ })).toBeVisible();
 
-  await page.goto("/commitments/new?preset=fd");
+  await open(page, "/commitments/new?preset=fd");
   await expect(page.getByRole("radio", { name: /Info only/ })).toBeChecked();
   await expect(label(page, "Next due date")).toHaveCount(0);
   await label(page, /^Amount/).fill("100000");
@@ -103,7 +109,7 @@ test("tracking-mode defaults: card is reminder-only, FD is info-only", async ({ 
 
 test("an old first due date offers the next upcoming date", async ({ page }) => {
   await signIn(page, "a");
-  await page.goto("/commitments/new?preset=sip");
+  await open(page, "/commitments/new?preset=sip");
   await label(page, "Next due date").fill(isoDaysFromToday(-75));
   await expect(text(page, "more than one payment ago")).toBeVisible();
   await page.getByRole("button", { name: /^Use / }).click();
@@ -114,8 +120,8 @@ test("an old first due date offers the next upcoming date", async ({ page }) => 
 
 test("another user sees none of user A's data", async ({ page }) => {
   await signIn(page, "a");
-  await page.goto("/commitments");
-  await page.getByRole("link", { name: /Credit card bill/ }).click();
+  await page.goto("/commitments?tab=all");
+  await page.getByRole("link", { name: /Credit card bill/ }).first().click();
   await expect(page).toHaveURL(/\/commitments\/[0-9a-f-]{36}$/);
   await expect(label(page, "Name")).toHaveValue("Credit card bill");
   const url = page.url();

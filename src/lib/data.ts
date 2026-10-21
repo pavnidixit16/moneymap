@@ -57,14 +57,47 @@ export async function getCommitment(id: string): Promise<CommitmentRow | null> {
   return data as CommitmentRow | null;
 }
 
-export async function listPayments(commitmentId?: string): Promise<Payment[]> {
+export interface PaymentRow extends Payment {
+  created_at: string;
+}
+
+export async function listPayments(commitmentId?: string): Promise<PaymentRow[]> {
   const { supabase } = await requireUser();
   let query = supabase
     .from("commitment_payments")
-    .select("id, commitment_id, due_date, outcome, amount_paise, paid_on")
+    .select("id, commitment_id, due_date, outcome, amount_paise, paid_on, created_at")
     .order("due_date", { ascending: false });
   if (commitmentId) query = query.eq("commitment_id", commitmentId);
   const { data, error } = await query;
   if (error) throw new Error("Couldn't load payments.");
-  return data as Payment[];
+  return data as PaymentRow[];
+}
+
+export interface TransactionRow {
+  id: string;
+  kind: "expense" | "income";
+  amount_paise: number;
+  category: string;
+  occurred_on: string;
+  note: string | null;
+}
+
+const TRANSACTION_COLUMNS = "id, kind, amount_paise, category, occurred_on, note";
+
+export async function listTransactions(from?: string, to?: string): Promise<TransactionRow[]> {
+  const { supabase } = await requireUser();
+  let query = supabase.from("transactions").select(TRANSACTION_COLUMNS).order("occurred_on", { ascending: false }).order("created_at", { ascending: false });
+  if (from) query = query.gte("occurred_on", from);
+  if (to) query = query.lte("occurred_on", to);
+  const { data, error } = await query;
+  if (error) throw new Error("Couldn't load your spending.");
+  return data as TransactionRow[];
+}
+
+export async function getTransaction(id: string): Promise<TransactionRow | null> {
+  const { supabase } = await requireUser();
+  if (!isUuid(id)) return null;
+  const { data, error } = await supabase.from("transactions").select(TRANSACTION_COLUMNS).eq("id", id).maybeSingle();
+  if (error) throw new Error("Couldn't load this entry.");
+  return data as TransactionRow | null;
 }

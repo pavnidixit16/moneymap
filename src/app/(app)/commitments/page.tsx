@@ -2,9 +2,12 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Badge, ButtonLink, Card, ErrorNote, PageHeader, Skeleton } from "@/components/ui";
 import { PRESETS, SECTION_ORDER, subtypeLabel } from "@/lib/commitments";
-import { listCommitments, type CommitmentRow } from "@/lib/data";
+import { listCommitments, listPayments, type CommitmentRow } from "@/lib/data";
+import { addDays, istToday } from "@/lib/engine/dates";
+import { comingUp, dueItemsUntil, type DueItem } from "@/lib/engine/overview";
 import { formatDate, frequencyLabel } from "@/lib/format";
 import { formatINR } from "@/lib/money";
+import { SettleControls } from "./settle-controls";
 
 function QuickAdd() {
   return (
@@ -54,7 +57,7 @@ function Row({ c }: { c: CommitmentRow }) {
   );
 }
 
-async function CommitmentList() {
+async function AllTab() {
   let commitments: CommitmentRow[];
   try {
     commitments = await listCommitments();
@@ -111,8 +114,157 @@ async function CommitmentList() {
   );
 }
 
+
+const STATE_TITLES = { overdue: "Overdue", due_today: "Due today", upcoming: "Next 60 days" } as const;
+
+function DueRow({ item, catchUpCount, canSettle }: { item: DueItem; catchUpCount: number; canSettle: boolean }) {
+  return (
+    <li className="py-3">
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex min-w-0 flex-col gap-1">
+          <Link href={`/commitments/${item.commitmentId}`} className="truncate font-medium">
+            {item.name}
+          </Link>
+          <span className="text-xs text-muted">Due {formatDate(item.date)}</span>
+          <span className="flex flex-wrap gap-1">
+            {item.state === "overdue" && <Badge tone="danger">Overdue</Badge>}
+            {item.bucket === "reminder" && <Badge>Reminder only</Badge>}
+            {item.bucket === "investment" && <Badge tone="accent">Investment</Badge>}
+            {item.isEstimate && <Badge>Estimate</Badge>}
+          </span>
+        </span>
+        <span className="shrink-0 text-right font-medium">{item.amountPaise > 0 ? formatINR(item.amountPaise) : "—"}</span>
+      </div>
+      {catchUpCount >= 2 ? (
+        <p className="pt-2 text-sm">
+          {catchUpCount} missed dates.{" "}
+          <Link href={`/commitments/${item.commitmentId}/catch-up`} className="font-medium text-accent underline">
+            Catch up
+          </Link>
+        </p>
+      ) : canSettle ? (
+        <SettleControls
+          key={`${item.commitmentId}-${item.date}`}
+          commitmentId={item.commitmentId}
+          dueDate={item.date}
+          expectedPaise={item.amountPaise}
+          label={`${item.name} due ${formatDate(item.date)}`}
+        />
+      ) : (
+        <p className="pt-1 text-xs text-muted">Settle the earlier date first.</p>
+      )}
+    </li>
+  );
+}
+
+async function UpcomingTab() {
+  let commitments: CommitmentRow[], payments;
+  try {
+    [commitments, payments] = await Promise.all([listCommitments(), listPayments()]);
+  } catch {
+    return <ErrorNote>Couldn&apos;t load your upcoming payments. Please refresh the page.</ErrorNote>;
+  }
+  if (commitments.length === 0) return <AllTab />;
+
+  const today = istToday();
+  const items = dueItemsUntil(commitments, payments, today, addDays(today, 60));
+  const maturities = comingUp(commitments, payments, today).filter((e) => e.type === "maturity");
+  // Paid / Skip only on each item's earliest open date, so dates are settled in order.
+  const earliestByCommitment = new Map<string, string>();
+  for (const i of items) if (!earliestByCommitment.has(i.commitmentId)) earliestByCommitment.set(i.commitmentId, i.date);
+  const overdueByCommitment = new Map<string, number>();
+  for (const i of items) {
+    if (i.state === "overdue") overdueByCommitment.set(i.commitmentId, (overdueByCommitment.get(i.commitmentId) ?? 0) + 1);
+  }
+
+  if (items.length === 0 && maturities.length === 0) {
+    return (
+      <Card>
+        <p className="font-medium">Nothing due in the next 60 days</p>
+        <p className="text-sm text-muted">Payments you add with a due date will appear here.</p>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      {(["overdue", "due_today", "upcoming"] as const).map((state) => {
+        const group = items.filter((i) => i.state === state);
+        if (group.length === 0) return null;
+        // A commitment with several missed dates shows one Catch up row, not one per date.
+        const shown = group.filter(
+          (i, idx) => state !== "overdue" || (overdueByCommitment.get(i.commitmentId) ?? 0) < 2 || group.findIndex((g) => g.commitmentId === i.commitmentId) === idx,
+        );
+        return (
+          <Card key={state}>
+            <h2 className={`text-sm font-medium ${state === "overdue" ? "text-danger" : "text-muted"}`}>{STATE_TITLES[state]}</h2>
+            <ul className="divide-y divide-border">
+              {shown.map((i) => (
+                <DueRow
+                  key={`${i.commitmentId}-${i.date}`}
+                  item={i}
+                  catchUpCount={state === "overdue" ? (overdueByCommitment.get(i.commitmentId) ?? 0) : 0}
+                  canSettle={earliestByCommitment.get(i.commitmentId) === i.date}
+                />
+              ))}
+            </ul>
+          </Card>
+        );
+      })}
+      {maturities.length > 0 && (
+        <Card>
+          <h2 className="text-sm font-medium text-muted">Maturities coming up</h2>
+          <ul className="divide-y divide-border">
+            {maturities.map((m) => (
+              <li key={m.commitmentId} className="flex justify-between gap-3 py-3">
+                <Link href={`/commitments/${m.commitmentId}`} className="font-medium">
+                  {m.name}
+                </Link>
+                <span className="text-sm text-muted">Matures {formatDate(m.date)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </>
+  );
+}
+
+async function Tabs({ searchParams }: { searchParams: PageProps<"/commitments">["searchParams"] }) {
+  const { tab } = await searchParams;
+  const active = tab === "all" ? "all" : "upcoming";
+  const tabs = [
+    { key: "upcoming", label: "Upcoming" },
+    { key: "all", label: "All" },
+  ];
+  return (
+    <>
+      <nav aria-label="Commitment views" className="flex gap-1 rounded-xl border border-border bg-surface p-1">
+        {tabs.map((t) => (
+          <Link
+            key={t.key}
+            href={`/commitments?tab=${t.key}`}
+            aria-current={active === t.key ? "page" : undefined}
+            className={`flex-1 rounded-lg py-2 text-center text-sm font-medium ${active === t.key ? "bg-accent text-accent-foreground" : "text-muted"}`}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+      {active === "all" ? <AllTab /> : <UpcomingTab />}
+    </>
+  );
+}
+
 async function Welcome({ searchParams }: { searchParams: PageProps<"/commitments">["searchParams"] }) {
-  const { welcome } = await searchParams;
+  const { welcome, caughtup } = await searchParams;
+  if (typeof caughtup === "string") {
+    return (
+      <p role="status" className="rounded-xl border border-accent/40 bg-surface p-3 text-sm">
+        Caught up: {caughtup} date{caughtup === "1" ? "" : "s"} recorded.
+      </p>
+    );
+  }
   if (welcome !== "1") return null;
   return (
     <p role="status" className="rounded-xl border border-accent/40 bg-surface p-3 text-sm">
@@ -129,7 +281,7 @@ export default function CommitmentsPage({ searchParams }: PageProps<"/commitment
         <Welcome searchParams={searchParams} />
       </Suspense>
       <Suspense fallback={<Skeleton className="h-64" />}>
-        <CommitmentList />
+        <Tabs searchParams={searchParams} />
       </Suspense>
     </>
   );
