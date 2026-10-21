@@ -1,42 +1,72 @@
 @import "tailwindcss";
 
+/* MoneyMap design tokens. Purple identity; components use these names only. */
 :root {
-  --background: #f7f7f5;
+  --background: #f5f3fa;
   --surface: #ffffff;
-  --foreground: #1c1c1a;
-  --muted: #6b6b66;
-  --border: #e4e4df;
-  --accent: #0f766e;
+  --surface-2: #f1ecfb;
+  --foreground: #1b1530;
+  --muted: #645d7a;
+  --border: #e6e0f2;
+  --accent: #5b2bb5;
+  --accent-strong: #43208a;
   --accent-foreground: #ffffff;
+  --accent-soft: #ede6fb;
+  --chart: #6d3fd6;
   --danger: #b42318;
+  --warning: #a15c07;
+  --success: #0b7a50;
+  --hero-from: #3f1a85;
+  --hero-to: #6b34d4;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #121211;
-    --surface: #1c1c1a;
-    --foreground: #ededea;
-    --muted: #a3a39d;
-    --border: #2e2e2b;
-    --accent: #2dd4bf;
-    --accent-foreground: #0b1f1d;
+    --background: #120f1d;
+    --surface: #1c1830;
+    --surface-2: #251f3d;
+    --foreground: #efeaf9;
+    --muted: #a69fbe;
+    --border: #322a4b;
+    --accent: #a78bfa;
+    --accent-strong: #c4b5fd;
+    --accent-foreground: #160f2b;
+    --accent-soft: #2c2350;
+    --chart: #9b7bf0;
     --danger: #f97066;
+    --warning: #fdb022;
+    --success: #47cd89;
+    --hero-from: #2e1466;
+    --hero-to: #4c25a3;
   }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-chart: var(--chart);
   --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-hero-from: var(--hero-from);
+  --color-hero-to: var(--hero-to);
   --font-sans: var(--font-geist-sans);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-tap-highlight-color: transparent;
+}
+
+input[type="date"] {
+  min-height: 2.75rem;
 }

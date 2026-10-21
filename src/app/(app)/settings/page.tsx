@@ -17,7 +17,7 @@ async function SettingsContent() {
     <>
       {firstTime && (
         <Card>
-          <p className="font-medium">Welcome to MoneyMap</p>
+          <p className="font-semibold">Welcome to MoneyMap</p>
           <p className="text-sm text-muted">
             Three quick details and you&apos;re ready to add your bills, EMIs and SIPs.
           </p>
@@ -40,14 +40,14 @@ async function SettingsContent() {
 export default function SettingsPage() {
   return (
     <>
-      <PageHeader title="Settings" />
+      <PageHeader title="Settings" subtitle="Pay, payday and budget" />
       <Suspense fallback={<Skeleton className="h-80" />}>
         <SettingsContent />
       </Suspense>
       <Card className="flex flex-col gap-2 text-sm text-muted">
         <p>Amounts are in Indian rupees. Dates follow Indian time.</p>
         <form action="/auth/signout" method="post">
-          <button type="submit" className="font-medium text-accent underline">
+          <button type="submit" className="font-semibold text-accent underline">
             Sign out
           </button>
         </form>

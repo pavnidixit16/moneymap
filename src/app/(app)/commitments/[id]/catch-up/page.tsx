@@ -63,7 +63,7 @@ export default function CatchUpPage({ params }: PageProps<"/commitments/[id]/cat
       <PageHeader
         title="Catch up"
         action={
-          <Link href="/commitments" className="text-sm font-medium text-accent underline">
+          <Link href="/commitments" className="text-sm font-semibold text-accent underline">
             Back
           </Link>
         }

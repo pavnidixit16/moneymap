@@ -1,7 +1,10 @@
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
-import { Badge, ButtonLink, Card, ErrorNote, PageHeader, Skeleton } from "@/components/ui";
-import { PRESETS, SECTION_ORDER, subtypeLabel } from "@/lib/commitments";
+import { commitmentIconName, IconBubble } from "@/components/icons";
+import { Badge, ButtonLink, Card, ErrorNote, PageHeader, SectionTitle, Skeleton, SuccessNote } from "@/components/ui";
+import { COMMITMENT_TYPES } from "@/lib/catalog";
+import { SECTION_ORDER, subtypeLabel } from "@/lib/commitments";
 import { listCommitments, listPayments, type CommitmentRow } from "@/lib/data";
 import { addDays, istToday } from "@/lib/engine/dates";
 import { comingUp, dueItemsUntil, type DueItem } from "@/lib/engine/overview";
@@ -9,19 +12,27 @@ import { formatDate, frequencyLabel } from "@/lib/format";
 import { formatINR } from "@/lib/money";
 import { SettleControls } from "./settle-controls";
 
+// Shortcut grid: the eight most common types, then "More" opens the full picker.
+const QUICK_TYPES = ["rent", "bill", "emi", "card", "insurance", "subscription", "sip", "fd"];
+
 function QuickAdd() {
   return (
-    <div className="flex flex-wrap gap-2">
-      {PRESETS.map((p) => (
-        <Link
-          key={p.key}
-          href={`/commitments/new?preset=${p.key}`}
-          className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm"
-        >
-          + {p.label}
-        </Link>
-      ))}
-    </div>
+    <Card>
+      <SectionTitle>Add a commitment</SectionTitle>
+      <ul className="grid grid-cols-4 gap-y-3 pt-2">
+        {QUICK_TYPES.map((key) => {
+          const t = COMMITMENT_TYPES.find((x) => x.key === key)!;
+          return (
+            <li key={key}>
+              <Link href={`/commitments/new?type=${key}`} aria-label={`Add ${t.label}`} className="flex flex-col items-center gap-1.5 text-center">
+                <IconBubble name={t.icon} className="size-12" />
+                <span className="text-xs leading-tight font-medium">{t.label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 
@@ -37,11 +48,13 @@ function Row({ c }: { c: CommitmentRow }) {
 
   return (
     <li>
-      <Link href={`/commitments/${c.id}`} className="flex items-start justify-between gap-3 py-3">
-        <span className="flex min-w-0 flex-col gap-1">
-          <span className="truncate font-medium">{c.name}</span>
+      <Link href={`/commitments/${c.id}`} className="flex items-start gap-3 py-3">
+        <IconBubble name={commitmentIconName(c.kind, c.subtype)} />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate font-semibold">{c.name}</span>
           <span className="text-xs text-muted">
-            {subtypeLabel(c.kind, c.subtype)} · {schedule}
+            {c.provider ? `${c.provider} · ` : `${subtypeLabel(c.kind, c.subtype)} · `}
+            {schedule}
           </span>
           <span className="flex flex-wrap gap-1">
             {c.tracking_mode === "reminder" && <Badge>Reminder only</Badge>}
@@ -51,7 +64,7 @@ function Row({ c }: { c: CommitmentRow }) {
             {c.status === "ended" && <Badge>Ended</Badge>}
           </span>
         </span>
-        <span className="shrink-0 text-right font-medium">{c.amount_paise > 0 ? formatINR(c.amount_paise) : "—"}</span>
+        <span className="shrink-0 text-right font-semibold">{c.amount_paise > 0 ? formatINR(c.amount_paise) : "—"}</span>
       </Link>
     </li>
   );
@@ -67,14 +80,16 @@ async function AllTab() {
 
   if (commitments.length === 0) {
     return (
-      <Card className="flex flex-col gap-3">
-        <p className="font-medium">Add what you pay regularly</p>
-        <p className="text-sm text-muted">
-          Rent, EMIs, card bills, insurance, subscriptions and SIPs. Enter each one once; MoneyMap works out what&apos;s
-          due before payday.
-        </p>
+      <>
+        <Card className="flex flex-col gap-1">
+          <p className="font-semibold">Add what you pay regularly</p>
+          <p className="text-sm text-muted">
+            Rent, EMIs, card bills, insurance, subscriptions and SIPs. Enter each one once; MoneyMap works out what&apos;s
+            due before payday.
+          </p>
+        </Card>
         <QuickAdd />
-      </Card>
+      </>
     );
   }
 
@@ -83,13 +98,12 @@ async function AllTab() {
 
   return (
     <>
-      <QuickAdd />
       {SECTION_ORDER.map((section) => {
         const items = active.filter((c) => section.kinds.includes(c.kind));
         if (items.length === 0) return null;
         return (
           <Card key={section.title}>
-            <h2 className="text-sm font-medium text-muted">{section.title}</h2>
+            <SectionTitle>{section.title}</SectionTitle>
             <ul className="divide-y divide-border">
               {items.map((c) => (
                 <Row key={c.id} c={c} />
@@ -110,6 +124,7 @@ async function AllTab() {
           </ul>
         </details>
       )}
+      <QuickAdd />
     </>
   );
 }
@@ -120,9 +135,10 @@ const STATE_TITLES = { overdue: "Overdue", due_today: "Due today", upcoming: "Ne
 function DueRow({ item, catchUpCount, canSettle }: { item: DueItem; catchUpCount: number; canSettle: boolean }) {
   return (
     <li className="py-3">
-      <div className="flex items-start justify-between gap-3">
-        <span className="flex min-w-0 flex-col gap-1">
-          <Link href={`/commitments/${item.commitmentId}`} className="truncate font-medium">
+      <div className="flex items-start gap-3">
+        <IconBubble name={commitmentIconName(item.kind, item.subtype)} />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <Link href={`/commitments/${item.commitmentId}`} className="truncate font-semibold">
             {item.name}
           </Link>
           <span className="text-xs text-muted">Due {formatDate(item.date)}</span>
@@ -133,12 +149,12 @@ function DueRow({ item, catchUpCount, canSettle }: { item: DueItem; catchUpCount
             {item.isEstimate && <Badge>Estimate</Badge>}
           </span>
         </span>
-        <span className="shrink-0 text-right font-medium">{item.amountPaise > 0 ? formatINR(item.amountPaise) : "—"}</span>
+        <span className="shrink-0 text-right font-semibold">{item.amountPaise > 0 ? formatINR(item.amountPaise) : "—"}</span>
       </div>
       {catchUpCount >= 2 ? (
         <p className="pt-2 text-sm">
           {catchUpCount} missed dates.{" "}
-          <Link href={`/commitments/${item.commitmentId}/catch-up`} className="font-medium text-accent underline">
+          <Link href={`/commitments/${item.commitmentId}/catch-up`} className="font-semibold text-accent underline">
             Catch up
           </Link>
         </p>
@@ -197,7 +213,7 @@ async function UpcomingTab() {
         );
         return (
           <Card key={state}>
-            <h2 className={`text-sm font-medium ${state === "overdue" ? "text-danger" : "text-muted"}`}>{STATE_TITLES[state]}</h2>
+            <h2 className={`mb-1 text-sm font-semibold ${state === "overdue" ? "text-danger" : "text-muted"}`}>{STATE_TITLES[state]}</h2>
             <ul className="divide-y divide-border">
               {shown.map((i) => (
                 <DueRow
@@ -213,7 +229,7 @@ async function UpcomingTab() {
       })}
       {maturities.length > 0 && (
         <Card>
-          <h2 className="text-sm font-medium text-muted">Maturities coming up</h2>
+          <SectionTitle>Maturities coming up</SectionTitle>
           <ul className="divide-y divide-border">
             {maturities.map((m) => (
               <li key={m.commitmentId} className="flex justify-between gap-3 py-3">
@@ -239,13 +255,13 @@ async function Tabs({ searchParams }: { searchParams: PageProps<"/commitments">[
   ];
   return (
     <>
-      <nav aria-label="Commitment views" className="flex gap-1 rounded-xl border border-border bg-surface p-1">
+      <nav aria-label="Commitment views" className="flex gap-1 rounded-full border border-border bg-surface p-1">
         {tabs.map((t) => (
           <Link
             key={t.key}
             href={`/commitments?tab=${t.key}`}
             aria-current={active === t.key ? "page" : undefined}
-            className={`flex-1 rounded-lg py-2 text-center text-sm font-medium ${active === t.key ? "bg-accent text-accent-foreground" : "text-muted"}`}
+            className={`flex-1 rounded-full py-2 text-center text-sm font-semibold ${active === t.key ? "bg-accent text-accent-foreground" : "text-muted"}`}
           >
             {t.label}
           </Link>
@@ -259,24 +275,24 @@ async function Tabs({ searchParams }: { searchParams: PageProps<"/commitments">[
 async function Welcome({ searchParams }: { searchParams: PageProps<"/commitments">["searchParams"] }) {
   const { welcome, caughtup } = await searchParams;
   if (typeof caughtup === "string") {
-    return (
-      <p role="status" className="rounded-xl border border-accent/40 bg-surface p-3 text-sm">
-        Caught up: {caughtup} date{caughtup === "1" ? "" : "s"} recorded.
-      </p>
-    );
+    return <SuccessNote>Caught up: {caughtup} date{caughtup === "1" ? "" : "s"} recorded.</SuccessNote>;
   }
   if (welcome !== "1") return null;
-  return (
-    <p role="status" className="rounded-xl border border-accent/40 bg-surface p-3 text-sm">
-      Settings saved. Now add your regular payments; the quick-add buttons fill in sensible defaults.
-    </p>
-  );
+  return <SuccessNote>Settings saved. Now add your regular payments; each type fills in sensible defaults.</SuccessNote>;
 }
 
 export default function CommitmentsPage({ searchParams }: PageProps<"/commitments">) {
   return (
     <>
-      <PageHeader title="Commitments" action={<ButtonLink href="/commitments/new">Add</ButtonLink>} />
+      <PageHeader
+        title="Commitments"
+        subtitle="What's already committed and what's due next"
+        action={
+          <ButtonLink href="/commitments/new">
+            <Plus className="size-4" aria-hidden /> Add
+          </ButtonLink>
+        }
+      />
       <Suspense fallback={null}>
         <Welcome searchParams={searchParams} />
       </Suspense>

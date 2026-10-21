@@ -12,6 +12,7 @@ export interface DueItem {
   commitmentId: string;
   name: string;
   kind: Commitment["kind"];
+  subtype: string;
   date: ISODate;
   amountPaise: Paise;
   isEstimate: boolean;
@@ -94,6 +95,7 @@ export function dueItemsUntil(
         commitmentId: c.id,
         name: c.name,
         kind: c.kind,
+        subtype: c.subtype,
         date,
         amountPaise: c.amount_paise,
         isEstimate: c.amount_is_estimate,

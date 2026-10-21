@@ -33,11 +33,15 @@ export async function getProfile(): Promise<ProfileRow> {
 
 export interface CommitmentRow extends Commitment {
   notes: string | null;
+  provider: string | null;
+  coverage_paise: number | null;
+  previous_amount_paise: number | null;
+  amount_changed_on: string | null;
   schedule_updated_at: string;
 }
 
 const COMMITMENT_COLUMNS =
-  "id, name, kind, subtype, tracking_mode, amount_paise, amount_is_estimate, frequency, anchor_day, next_due_date, end_date, maturity_date, status, review_status, notes, schedule_updated_at";
+  "id, name, kind, subtype, tracking_mode, amount_paise, amount_is_estimate, frequency, anchor_day, next_due_date, end_date, maturity_date, status, review_status, notes, schedule_updated_at, provider, coverage_paise, previous_amount_paise, amount_changed_on";
 
 export async function listCommitments(): Promise<CommitmentRow[]> {
   const { supabase } = await requireUser();
@@ -100,4 +104,16 @@ export async function getTransaction(id: string): Promise<TransactionRow | null>
   const { data, error } = await supabase.from("transactions").select(TRANSACTION_COLUMNS).eq("id", id).maybeSingle();
   if (error) throw new Error("Couldn't load this entry.");
   return data as TransactionRow | null;
+}
+
+export async function listRecentTransactions(limit = 5): Promise<TransactionRow[]> {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select(TRANSACTION_COLUMNS)
+    .order("occurred_on", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error("Couldn't load your recent transactions.");
+  return data as TransactionRow[];
 }

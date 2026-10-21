@@ -42,7 +42,7 @@ export function CatchUpForm({
           ...(allowUnrecorded ? [{ value: "paid_unrecorded" as const, label: "Paid earlier, amount not recorded" }] : []),
         ];
         return (
-          <fieldset key={date} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+          <fieldset key={date} className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4">
             <input type="hidden" name="due_date" value={date} />
             <legend className="px-1 font-medium">Due {formatDate(date)}</legend>
             {options.map((o) => (
@@ -82,7 +82,7 @@ export function CatchUpForm({
       <button
         type="submit"
         disabled={pending || chosen === 0}
-        className="h-12 rounded-xl bg-accent font-medium text-accent-foreground disabled:opacity-60"
+        className="h-12 rounded-full bg-accent font-semibold text-accent-foreground disabled:opacity-60"
       >
         {pending ? "Saving…" : chosen === 0 ? "Choose at least one date" : `Save ${chosen} date${chosen === 1 ? "" : "s"}`}
       </button>

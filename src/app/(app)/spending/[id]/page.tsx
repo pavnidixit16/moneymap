@@ -55,7 +55,7 @@ export default function EditTransactionPage(props: PageProps<"/spending/[id]">) 
       <PageHeader
         title="Edit spending"
         action={
-          <Link href="/spending" className="text-sm font-medium text-accent underline">
+          <Link href="/spending" className="text-sm font-semibold text-accent underline">
             Back
           </Link>
         }

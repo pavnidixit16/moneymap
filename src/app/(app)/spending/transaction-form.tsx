@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useActionState, useState } from "react";
-import { Field, inputClass } from "@/components/ui";
+import { Field, inputClass, primaryButton } from "@/components/ui";
 import { istToday } from "@/lib/engine/dates";
 import { EXPENSE_CATEGORIES } from "@/lib/transactions";
 import { saveTransaction, type TransactionFormState } from "./actions";
@@ -32,12 +32,12 @@ export function TransactionForm({ initial }: { initial: TransactionFormValues })
     >
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
 
-      <fieldset className="flex gap-1 rounded-xl border border-border bg-surface p-1">
+      <fieldset className="flex gap-1 rounded-full border border-border bg-surface p-1">
         <legend className="sr-only">Type</legend>
         {(["expense", "income"] as const).map((k) => (
           <label
             key={k}
-            className={`flex-1 cursor-pointer rounded-lg py-2 text-center text-sm font-medium ${kind === k ? "bg-accent text-accent-foreground" : "text-muted"}`}
+            className={`flex-1 cursor-pointer rounded-full py-2 text-center text-sm font-semibold ${kind === k ? "bg-accent text-accent-foreground" : "text-muted"}`}
           >
             <input type="radio" name="kind" value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
             {k === "expense" ? "Expense" : "Extra income"}
@@ -50,7 +50,12 @@ export function TransactionForm({ initial }: { initial: TransactionFormValues })
       </Field>
 
       {kind === "expense" ? (
-        <Field label="Category" htmlFor="category" error={e.category} hint="Rent, bills and EMIs belong under Commitments.">
+        <Field
+          label="Category"
+          htmlFor="category"
+          error={e.category}
+          hint="Use one-off bills only for bills you haven't set up as a commitment. Recurring rent, bills, EMIs and card bills belong under Commitments, so nothing is counted twice."
+        >
           <select id="category" name="category" defaultValue={initial.category} className={inputClass}>
             {EXPENSE_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
@@ -82,7 +87,7 @@ export function TransactionForm({ initial }: { initial: TransactionFormValues })
           {e.form}
         </p>
       )}
-      <button type="submit" disabled={pending} className="h-12 rounded-xl bg-accent font-medium text-accent-foreground disabled:opacity-60">
+      <button type="submit" disabled={pending} className={primaryButton}>
         {pending ? "Saving…" : initial.id ? "Save changes" : kind === "expense" ? "Add expense" : "Add income"}
       </button>
     </form>

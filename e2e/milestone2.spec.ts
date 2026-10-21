@@ -58,9 +58,9 @@ test("add, validate, edit, cancel, reactivate and delete a commitment", async ({
   await page.goto("/commitments");
   await expect(text(page, "Add what you pay regularly")).toBeVisible();
 
-  await page.getByRole("link", { name: "+ Rent" }).first().click();
+  await page.getByRole("link", { name: "Add Rent" }).first().click();
   await expect(label(page, "Name")).toHaveValue("Rent");
-  await expect(page.getByRole("radio", { name: /Count it/ })).toBeChecked();
+  await expect(text(page, "Advanced: Count it")).toBeVisible();
   await page.getByRole("button", { name: "Add commitment" }).click();
   await expect(text(page, "Enter the amount (an estimate is fine)")).toBeVisible();
   await expect(text(page, "Enter the next due date")).toBeVisible();
@@ -92,38 +92,41 @@ test("add, validate, edit, cancel, reactivate and delete a commitment", async ({
 
 test("tracking-mode defaults: card is reminder-only, FD is info-only", async ({ page }) => {
   await signIn(page, "a");
-  await open(page, "/commitments/new?preset=card");
-  await expect(page.getByRole("radio", { name: /Reminder only/ })).toBeChecked();
-  await label(page, "Next due date").fill(isoDaysFromToday(5));
+  await open(page, "/commitments/new?type=card");
+  await expect(page.getByRole("radio", { name: /I log card purchases as expenses/ })).toBeChecked();
+  await label(page, "Card issuer").selectOption("HDFC Bank");
+  await label(page, "Card (optional)").fill("Millennia");
+  await expect(label(page, "Card nickname")).toHaveValue("HDFC Millennia");
+  await label(page, "Next bill due date").fill(isoDaysFromToday(5));
   await page.getByRole("button", { name: "Add commitment" }).click();
-  await expect(page.getByRole("link", { name: /Credit card bill.*Reminder only/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /HDFC Millennia.*HDFC Bank.*Reminder only/ })).toBeVisible();
 
-  await open(page, "/commitments/new?preset=fd");
-  await expect(page.getByRole("radio", { name: /Info only/ })).toBeChecked();
-  await expect(label(page, "Next due date")).toHaveCount(0);
-  await label(page, /^Amount/).fill("100000");
-  await label(page, /Maturity or renewal date/).fill(isoDaysFromToday(40));
+  await open(page, "/commitments/new?type=fd");
+  await expect(page.getByRole("radio", { name: /Already deposited/ })).toBeChecked();
+  await expect(page.getByLabel("Deposit date", { exact: true }).filter({ visible: true })).toHaveCount(0);
+  await label(page, /^Principal/).fill("100000");
+  await label(page, /Maturity date/).fill(isoDaysFromToday(40));
   await page.getByRole("button", { name: "Add commitment" }).click();
   await expect(page.getByRole("link", { name: /Fixed deposit.*Matures.*Info only/ })).toBeVisible();
 });
 
 test("an old first due date offers the next upcoming date", async ({ page }) => {
   await signIn(page, "a");
-  await open(page, "/commitments/new?preset=sip");
-  await label(page, "Next due date").fill(isoDaysFromToday(-75));
+  await open(page, "/commitments/new?type=sip");
+  await label(page, "Next SIP date").fill(isoDaysFromToday(-75));
   await expect(text(page, "more than one payment ago")).toBeVisible();
   await page.getByRole("button", { name: /^Use / }).click();
   await expect(text(page, "more than one payment ago")).toHaveCount(0);
-  const value = await label(page, "Next due date").inputValue();
+  const value = await label(page, "Next SIP date").inputValue();
   expect(value >= isoDaysFromToday(0)).toBe(true);
 });
 
 test("another user sees none of user A's data", async ({ page }) => {
   await signIn(page, "a");
   await page.goto("/commitments?tab=all");
-  await page.getByRole("link", { name: /Credit card bill/ }).first().click();
+  await page.getByRole("link", { name: /HDFC Millennia/ }).first().click();
   await expect(page).toHaveURL(/\/commitments\/[0-9a-f-]{36}$/);
-  await expect(label(page, "Name")).toHaveValue("Credit card bill");
+  await expect(label(page, "Card nickname")).toHaveValue("HDFC Millennia");
   const url = page.url();
 
   await signIn(page, "b");
@@ -131,12 +134,12 @@ test("another user sees none of user A's data", async ({ page }) => {
   await expect(text(page, "Add what you pay regularly")).toBeVisible();
   await page.goto(url);
   await expect(text(page, /could not be found|404/i).first()).toBeVisible();
-  await expect(label(page, "Name")).toHaveCount(0);
+  await expect(label(page, "Card nickname")).toHaveCount(0);
 });
 
 test("every screen fits a 360px-wide phone without sideways scrolling", async ({ page }) => {
   await signIn(page, "a");
-  for (const path of ["/overview", "/commitments", "/commitments/new?preset=insurance", "/settings", "/privacy"]) {
+  for (const path of ["/overview", "/commitments", "/commitments/new?type=insurance", "/settings", "/privacy"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -29,7 +29,7 @@ export function GoogleButton({ next }: { next?: string }) {
         type="button"
         onClick={signIn}
         disabled={pending}
-        className="h-12 rounded-xl bg-accent px-4 font-medium text-accent-foreground disabled:opacity-60"
+        className="h-12 rounded-full bg-accent px-4 font-semibold text-accent-foreground shadow-sm disabled:opacity-60"
       >
         {pending ? "Opening Google…" : "Continue with Google"}
       </button>

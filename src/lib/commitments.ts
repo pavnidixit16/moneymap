@@ -109,27 +109,6 @@ export function subtypeLabel(kind: CommitmentKind, subtype: string): string {
   return SUBTYPES[kind].find((s) => s.value === subtype)?.label ?? "Other";
 }
 
-export interface Preset {
-  key: string;
-  label: string;
-  name: string;
-  kind: CommitmentKind;
-  subtype: string;
-  frequency: Frequency;
-  estimate?: boolean;
-}
-
-export const PRESETS: Preset[] = [
-  { key: "rent", label: "Rent", name: "Rent", kind: "bill", subtype: "rent", frequency: "monthly" },
-  { key: "emi", label: "Loan EMI", name: "Loan EMI", kind: "loan", subtype: "home_loan", frequency: "monthly" },
-  { key: "card", label: "Credit card", name: "Credit card bill", kind: "credit_card", subtype: "credit_card", frequency: "monthly" },
-  { key: "electricity", label: "Electricity", name: "Electricity", kind: "bill", subtype: "electricity", frequency: "monthly", estimate: true },
-  { key: "sip", label: "SIP", name: "SIP", kind: "investment", subtype: "sip", frequency: "monthly" },
-  { key: "ott", label: "Streaming", name: "Streaming subscription", kind: "subscription", subtype: "ott", frequency: "monthly" },
-  { key: "insurance", label: "Insurance", name: "Health insurance", kind: "insurance", subtype: "health", frequency: "yearly" },
-  { key: "fd", label: "FD", name: "Fixed deposit", kind: "investment", subtype: "fd", frequency: "one_time" },
-];
-
 // When a first due date is more than one period in the past, suggest the first date on
 // the same schedule that is today or later (spec §8: avoid piles of overdue dates).
 export function staleDueDateSuggestion(
@@ -168,6 +147,12 @@ export const commitmentSchema = z
     next_due_date: optionalDate,
     end_date: optionalDate,
     maturity_date: optionalDate,
+    provider: z
+      .string()
+      .trim()
+      .max(80, "Keep this under 80 characters")
+      .transform((v) => (v === "" ? null : v)),
+    coverage: z.string().trim(),
     notes: z
       .string()
       .trim()
@@ -197,6 +182,18 @@ export const commitmentSchema = z
       }
     }
 
+    let coverage_paise: number | null = null;
+    if (v.coverage !== "") {
+      const parsed = parseRupees(v.coverage);
+      if (parsed === null) {
+        ctx.addIssue({ code: "custom", path: ["coverage"], message: "Enter a cover amount like 1000000" });
+      } else if (parsed > 100_000_000_000) {
+        ctx.addIssue({ code: "custom", path: ["coverage"], message: "That amount is too large" });
+      } else {
+        coverage_paise = parsed;
+      }
+    }
+
     const isInfo = v.tracking_mode === "info";
     if (!isInfo && !v.next_due_date) {
       ctx.addIssue({ code: "custom", path: ["next_due_date"], message: "Enter the next due date" });
@@ -217,6 +214,9 @@ export const commitmentSchema = z
       next_due_date: isInfo ? null : v.next_due_date,
       end_date: isInfo || v.frequency === "one_time" ? null : v.end_date,
       maturity_date: v.maturity_date,
+      provider: v.provider,
+      // Cover is display-only and only meaningful for insurance.
+      coverage_paise: v.kind === "insurance" ? coverage_paise : null,
       notes: v.notes,
     };
   });
@@ -235,6 +235,8 @@ export function commitmentFormValues(formData: FormData) {
     next_due_date: String(formData.get("next_due_date") ?? ""),
     end_date: String(formData.get("end_date") ?? ""),
     maturity_date: String(formData.get("maturity_date") ?? ""),
+    provider: String(formData.get("provider") ?? ""),
+    coverage: String(formData.get("coverage") ?? ""),
     notes: String(formData.get("notes") ?? ""),
   };
 }

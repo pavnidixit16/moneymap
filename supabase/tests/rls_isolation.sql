@@ -214,6 +214,23 @@ begin
   raise notice 'PASS: schedule-edit tracking and price-increase history work';
 end $$;
 
+-- ---------------------------------------------------------------- migration 4 details (as B)
+do $$ begin
+  insert into public.transactions (kind, amount_paise, category, occurred_on)
+  values ('expense', 120000, 'bills', '2026-10-03');
+
+  insert into public.commitments (name, kind, subtype, provider, tracking_mode, amount_paise, coverage_paise, frequency, next_due_date)
+  values ('Family floater', 'insurance', 'health', 'Star Health', 'outflow', 2400000, 1000000000, 'yearly', '2027-03-12');
+
+  begin
+    insert into public.commitments (name, kind, tracking_mode, amount_paise, coverage_paise, frequency, next_due_date)
+    values ('Bad', 'insurance', 'outflow', 100, -1, 'yearly', '2027-03-12');
+    raise exception 'FAIL: a negative coverage amount was accepted';
+  exception when check_violation then null; end;
+
+  raise notice 'PASS: bills category, provider and coverage are stored';
+end $$;
+
 -- ---------------------------------------------------------------- anonymous visitor
 reset role;
 set local role anon;

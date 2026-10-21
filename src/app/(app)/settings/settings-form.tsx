@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useActionState } from "react";
-import { Field, inputClass } from "@/components/ui";
+import { Field, inputClass, primaryButton } from "@/components/ui";
 import { saveSettings, type SettingsState } from "./actions";
 
 export interface SettingsValues {
@@ -63,15 +63,15 @@ export function SettingsForm({ initial }: { initial: SettingsValues }) {
         </p>
       )}
       {state.saved && (
-        <p role="status" className="text-sm text-accent">
-          Saved.
+        <p role="status" className="rounded-xl border border-success/40 p-2 text-sm text-success">
+          Saved. Your dashboard now uses these settings.
         </p>
       )}
 
       <button
         type="submit"
         disabled={pending}
-        className="h-12 rounded-xl bg-accent font-medium text-accent-foreground disabled:opacity-60"
+        className={primaryButton}
       >
         {pending ? "Saving…" : initial.firstTime ? "Save and continue" : "Save settings"}
       </button>

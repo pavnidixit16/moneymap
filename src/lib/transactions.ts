@@ -4,16 +4,18 @@ import { addDays, isISODate, type ISODate } from "./engine/dates";
 import { parseRupees } from "./money";
 
 // Rent and utilities are deliberately absent: they are commitments (spec §1 classification).
+// "bills" is for one-off bills only; recurring ones are commitments (the form says so).
 export const EXPENSE_CATEGORIES = [
   { value: "food", label: "Food & dining" },
   { value: "groceries", label: "Groceries" },
   { value: "shopping", label: "Shopping" },
-  { value: "transport", label: "Transport" },
+  { value: "transport", label: "Rides & transport" },
+  { value: "travel", label: "Travel" },
   { value: "entertainment", label: "Entertainment" },
-  { value: "healthcare", label: "Healthcare" },
+  { value: "bills", label: "One-off bills" },
+  { value: "healthcare", label: "Health" },
   { value: "personal_care", label: "Personal care" },
   { value: "education", label: "Education" },
-  { value: "travel", label: "Travel" },
   { value: "other", label: "Other" },
 ] as const;
 

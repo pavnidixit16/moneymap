@@ -64,7 +64,7 @@ export default function PrivacyPage() {
         </p>
       </section>
 
-      <Link href="/login" className="font-medium text-accent underline">
+      <Link href="/login" className="font-semibold text-accent underline">
         Back to MoneyMap
       </Link>
     </main>

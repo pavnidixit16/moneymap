@@ -6,6 +6,7 @@ import { getCommitment, listPayments } from "@/lib/data";
 import { formatDate } from "@/lib/format";
 import { formatINR, paiseToInput } from "@/lib/money";
 import { cancelCommitment, deleteCommitment, reactivateCommitment } from "../actions";
+import { variantFor } from "@/lib/catalog";
 import { CommitmentForm } from "../commitment-form";
 import { PaymentControls } from "../settle-controls";
 
@@ -44,7 +45,7 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
           </p>
           <form action={reactivateCommitment}>
             <input type="hidden" name="id" value={commitment.id} />
-            <button type="submit" className="font-medium text-accent underline">
+            <button type="submit" className="font-semibold text-accent underline">
               Reactivate
             </button>
           </form>
@@ -55,6 +56,7 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
         key={crypto.randomUUID()}
         initial={{
           id: commitment.id,
+          variant: variantFor(commitment.kind, commitment.subtype),
           name: commitment.name,
           kind: commitment.kind,
           subtype: commitment.subtype,
@@ -65,6 +67,8 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
           next_due_date: commitment.next_due_date ?? "",
           end_date: commitment.end_date ?? "",
           maturity_date: commitment.maturity_date ?? "",
+          provider: commitment.provider ?? "",
+          coverage: commitment.coverage_paise ? paiseToInput(commitment.coverage_paise) : "",
           notes: commitment.notes ?? "",
         }}
       />
@@ -117,7 +121,7 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
         {commitment.status === "active" && (
           <form action={cancelCommitment} className="flex flex-col gap-1">
             <input type="hidden" name="id" value={commitment.id} />
-            <button type="submit" className="self-start font-medium text-accent underline">
+            <button type="submit" className="self-start font-semibold text-accent underline">
               Mark as cancelled
             </button>
             <p className="text-xs text-muted">
@@ -152,7 +156,7 @@ export default function EditCommitmentPage(props: PageProps<"/commitments/[id]">
       <PageHeader
         title="Edit commitment"
         action={
-          <Link href="/commitments" className="text-sm font-medium text-accent underline">
+          <Link href="/commitments" className="text-sm font-semibold text-accent underline">
             Back
           </Link>
         }

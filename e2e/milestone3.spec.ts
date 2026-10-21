@@ -37,7 +37,7 @@ test("catch up records only the chosen dates", async ({ page }) => {
   expect(missed.length).toBeGreaterThanOrEqual(3);
   await signIn(page, "b");
 
-  await open(page, "/commitments/new");
+  await open(page, "/commitments/new?type=bill");
   await label(page, "Name").fill("Broadband");
   await label(page, "Type").selectOption("internet");
   await label(page, /Amount each time/).fill("1000");
@@ -121,10 +121,11 @@ test("only the earliest open date of an item can be settled", async ({ page }) =
 
 test("skip a due date", async ({ page }) => {
   await signIn(page, "b");
-  await open(page, "/commitments/new?preset=ott");
+  await open(page, "/commitments/new?type=subscription");
+  await label(page, "Service").fill("Streaming subscription");
   await label(page, /Amount each time/).fill("649");
   const due = addDays(today, 5);
-  await label(page, "Next due date").fill(due);
+  await label(page, "Next charge date").fill(due);
   await page.getByRole("button", { name: "Add commitment" }).click();
 
   await page.goto("/commitments?tab=upcoming");
@@ -150,7 +151,8 @@ test("spending: validate, add, edit, extra income, delete and switch cycles", as
   await page.getByRole("button", { name: "Add expense" }).click();
   await expect(page).toHaveURL(/\/spending\?on=/);
   await expect(page.getByRole("link", { name: /Groceries.*₹450/ })).toBeVisible();
-  await expect(text(page, "Over by ₹450")).toBeVisible(); // user B's budget is ₹0
+  await expect(text(page, "Spent ₹450 this cycle.")).toBeVisible(); // user B has no budget set
+  await expect(text(page, /Groceries.*₹450.*100%/).first()).toBeVisible();
 
   await page.getByRole("link", { name: /Groceries.*₹450/ }).click();
   await label(page, "Amount (₹)").fill("500");
@@ -162,7 +164,7 @@ test("spending: validate, add, edit, extra income, delete and switch cycles", as
   await label(page, "Amount (₹)").fill("2000");
   await page.getByRole("button", { name: "Add income" }).click();
   await expect(text(page, "Extra income this cycle: ₹2,000")).toBeVisible();
-  await expect(text(page, "Over by ₹500")).toBeVisible(); // income doesn't change the spending budget
+  await expect(text(page, "Spent ₹500 this cycle.")).toBeVisible(); // income doesn't change spending
 
   await page.getByRole("link", { name: /Groceries.*₹500/ }).click();
   await text(page, "Delete…").click();

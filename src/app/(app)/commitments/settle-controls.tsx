@@ -24,7 +24,7 @@ function Message({ state }: { state: ActionResult }) {
   );
 }
 
-const smallButton = "h-9 rounded-lg px-3 text-sm font-medium disabled:opacity-60";
+const smallButton = "h-9 rounded-full px-4 text-sm font-semibold disabled:opacity-60";
 
 export function SettleControls({
   commitmentId,
@@ -150,14 +150,14 @@ export function PaymentControls({
     <div className="flex flex-col gap-1">
       <div className="flex gap-3 text-sm">
         {isPaid && (
-          <button type="button" onClick={() => setEditing(true)} className="font-medium text-accent underline">
+          <button type="button" onClick={() => setEditing(true)} className="font-semibold text-accent underline">
             Edit
           </button>
         )}
         {canUndo && (
           <form onSubmit={submitWith(undoAction)}>
             <input type="hidden" name="payment_id" value={paymentId} />
-            <button type="submit" disabled={undoPending} className="font-medium text-accent underline disabled:opacity-60">
+            <button type="submit" disabled={undoPending} className="font-semibold text-accent underline disabled:opacity-60">
               {undoPending ? "Undoing…" : "Undo"}
             </button>
           </form>

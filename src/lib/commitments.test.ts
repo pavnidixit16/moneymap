@@ -12,6 +12,8 @@ const valid = {
   next_due_date: "2026-11-05",
   end_date: "",
   maturity_date: "",
+  provider: "",
+  coverage: "",
   notes: "",
 };
 
@@ -72,6 +74,29 @@ describe("commitmentSchema", () => {
     const r = commitmentSchema.safeParse({ ...valid, ...patch });
     expect(r.success).toBe(false);
     expect(r.error!.issues[0].path[0]).toBe(field);
+  });
+});
+
+describe("provider and cover", () => {
+  it("keeps the provider and stores insurance cover separately from the premium", () => {
+    const r = commitmentSchema.safeParse({
+      ...valid,
+      name: "Family floater",
+      kind: "insurance",
+      subtype: "health",
+      provider: "Star Health",
+      amount: "24,000",
+      coverage: "10,00,000",
+      frequency: "yearly",
+    });
+    expect(r.success && r.data).toMatchObject({ provider: "Star Health", amount_paise: 2400000, coverage_paise: 100000000 });
+  });
+
+  it("ignores cover for non-insurance items and rejects bad cover", () => {
+    const r = commitmentSchema.safeParse({ ...valid, coverage: "500000" });
+    expect(r.success && r.data.coverage_paise).toBeNull();
+    const bad = commitmentSchema.safeParse({ ...valid, kind: "insurance", subtype: "health", coverage: "lots" });
+    expect(bad.success).toBe(false);
   });
 });
 

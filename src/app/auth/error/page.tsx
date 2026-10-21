@@ -25,7 +25,7 @@ export default function AuthErrorPage({ searchParams }: PageProps<"/auth/error">
       <Suspense fallback={<p className="text-muted">Loading…</p>}>
         <Message searchParams={searchParams} />
       </Suspense>
-      <Link href="/login" className="font-medium text-accent underline">
+      <Link href="/login" className="font-semibold text-accent underline">
         Back to sign in
       </Link>
     </main>
