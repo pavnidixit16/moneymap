@@ -3,7 +3,7 @@
 // Anything it is not sure about is reported as an issue for the user to review — it never
 // silently invents a value.
 import { addDays, isISODate, parseISODate, toISODate, type ISODate } from "../engine/dates";
-import { parseRupees } from "../money";
+import { formatINR, parseRupees } from "../money";
 import type { CaptureSource, PaymentMethod, ProposalIssue, ProposedTransaction } from "./types";
 
 const MONTHS: Record<string, number> = {
@@ -37,6 +37,28 @@ const PAYMENT_KEYWORDS: [PaymentMethod, RegExp][] = [
   ["net_banking", /\b(net ?banking|neft|imps|rtgs)\b/],
   ["cash", /\bcash\b/],
 ];
+
+// Card issuers, including how speech-to-text tends to spell them ("ICIC", "H D F C").
+const CARD_ISSUER_WORDS: [string, RegExp][] = [
+  ["HDFC", /\bh\s?d\s?f\s?c\b/],
+  ["ICICI", /\bi\s?c\s?i\s?c\s?i?\b/],
+  ["SBI", /\bs\s?b\s?i\b/],
+  ["Axis", /\baxis\b/],
+  ["Kotak", /\bkotak\b/],
+  ["Amex", /\b(amex|american express)\b/],
+  ["IDFC FIRST", /\bidfc\b/],
+  ["IndusInd", /\bindusind\b/],
+  ["Yes Bank", /\byes bank\b/],
+  ["RBL", /\brbl\b/],
+  ["HSBC", /\bhsbc\b/],
+  ["Standard Chartered", /\b(standard chartered|scb)\b/],
+  ["OneCard", /\bone ?card\b/],
+  ["Scapia", /\bscapia\b/],
+];
+
+// "paid my credit card bill", "ICICI card bill was 20,000", "bill for my HDFC card".
+const CARD_BILL =
+  /\b(?:credit ?card|cc)\s+(?:bill|dues|outstanding|payment|statement)\b|\bcard\s+(?:bill|dues|outstanding)\b|\b(?:bill|dues)\s+(?:for|of|on)\s+(?:my\s+|the\s+)?(?:[a-z]+\s+){0,2}(?:credit\s*)?card\b/;
 
 const titleCase = (s: string) => s.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 
@@ -76,12 +98,12 @@ export function findDate(lower: string, today: ISODate): { date: ISODate | null;
     const date = build(numeric[3] ? Number(numeric[3]) : thisYear, Number(numeric[2]), Number(numeric[1]), Boolean(numeric[3]));
     if (date) return { date, matched: numeric[0] };
   }
-  const dayMonth = lower.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s-]*(?:of\\s+)?${MONTH_RE}[a-z]*[\\s,-]*(\\d{2,4})?\\b`));
+  const dayMonth = lower.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s-]*(?:of\\s+)?${MONTH_RE}\\b[\\s,-]*(\\d{2,4})?\\b`));
   if (dayMonth) {
     const date = build(dayMonth[3] ? Number(dayMonth[3]) : thisYear, MONTHS[dayMonth[2].slice(0, 3)], Number(dayMonth[1]), Boolean(dayMonth[3]));
     if (date) return { date, matched: dayMonth[0] };
   }
-  const monthDay = lower.match(new RegExp(`\\b${MONTH_RE}[a-z]*\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{4}))?\\b`));
+  const monthDay = lower.match(new RegExp(`\\b${MONTH_RE}\\b\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{4}))?\\b`));
   if (monthDay) {
     const date = build(monthDay[3] ? Number(monthDay[3]) : thisYear, MONTHS[monthDay[1].slice(0, 3)], Number(monthDay[2]), Boolean(monthDay[3]));
     if (date) return { date, matched: monthDay[0] };
@@ -100,23 +122,50 @@ function findAmount(text: string): { paise: number | null; issue?: string } {
   t = t.replace(/\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/g, " ");
   t = t.replace(/\b20\d{2}-\d{1,2}-\d{1,2}\b/g, " ");
   t = t.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ");
+  t = t.replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?[\\s-]*(?:of\\s+)?${MONTH_RE}\\b(?:[\\s,-]*(?:19|20)\\d{2})?\\b`, "g"), " ");
+  t = t.replace(new RegExp(`\\b${MONTH_RE}\\b\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*(?:19|20)\\d{2})?\\b`, "g"), " ");
+  t = t.replace(/\b(?:in|of|since|year)\s+(?:19|20)\d{2}\b/g, " ");
+  t = t.replace(/\b\d{1,2}(?:st|nd|rd|th)\b/g, " ");
 
-  const tagged: string[] = [];
-  for (const m of t.matchAll(/(?:₹|\brs\.?|\binr)\s*([\d,]+(?:\.\d{1,2})?)/g)) tagged.push(m[1]);
-  for (const m of t.matchAll(/\b([\d,]+(?:\.\d{1,2})?)\s*(?:rupees|rs\b|inr\b|bucks)/g)) tagged.push(m[1]);
-  for (const m of t.matchAll(/\b(\d+(?:\.\d)?)\s*k\b/g)) tagged.push(String(Math.round(Number(m[1]) * 1000)));
-
-  let candidates = tagged;
-  if (candidates.length === 0) {
-    candidates = [...t.matchAll(/\b(\d[\d,]*(?:\.\d{1,2})?)\b/g)]
-      .map((m) => m[1])
-      // Bare day numbers ("on the 21st") and years are not amounts.
-      .filter((n) => !/^(19|20)\d{2}$/.test(n));
+  // Self-corrections, common when speaking: "200, no actually 20,000", "make that 500",
+  // "not 200 but 2,000". The amount after the last correction is the one meant.
+  const cues = [...t.matchAll(CORRECTION_CUES)];
+  if (cues.length > 0) {
+    const last = cues[cues.length - 1];
+    const after = amountsIn(t.slice(last.index + last[0].length));
+    const before = amountsIn(t.slice(0, last.index + last[0].length));
+    if (after.length > 0 && before.length > 0) {
+      const extra = after.length > 1 ? " More than one amount follows it; check this is the right one." : "";
+      return {
+        paise: after[0],
+        issue: `You corrected the amount (${before.map(formatINR).join(", ")} → ${formatINR(after[0])}); using ${formatINR(after[0])}.${extra}`,
+      };
+    }
   }
-  const unique = [...new Set(candidates.map((c) => parseRupees(c)).filter((p): p is number => p !== null && p > 0))];
+
+  const unique = amountsIn(t);
   if (unique.length === 0) return { paise: null, issue: "No amount found. Enter the amount." };
-  if (unique.length > 1) return { paise: unique[0], issue: "Several amounts found; check this is the right one." };
+  // Never guess between amounts: the user picks.
+  if (unique.length > 1) return { paise: null, issue: `Several amounts found (${unique.map(formatINR).join(", ")}). Enter the right one.` };
   return { paise: unique[0] };
+}
+
+const CORRECTION_CUES = /\b(?:no+,? (?:no+,? )?(?:actually|wait|sorry|i mean)|actually|i mean|sorry|correction|make (?:that|it)|rather|wait|scratch that|not\s+(?:₹|rs\.?\s*|inr\s*)?[\d,.]+k?\s*(?:rupees|rs)?,?\s*but)\b|,\s*no+\b|\bno+,|\bno+\b(?=\s*(?:₹|rs\b|inr\b|its?\b|it's\b|\d))/g;
+
+// Distinct amounts (in paise, in order of appearance) in already-cleaned text. Amounts with a
+// currency marker win; bare numbers are used only when nothing is marked.
+function amountsIn(t: string): number[] {
+  const tagged: { at: number; value: string }[] = [];
+  for (const m of t.matchAll(/(?:₹|\brs\.?|\binr)\s*([\d,]+(?:\.\d{1,2})?)/g)) tagged.push({ at: m.index, value: m[1] });
+  for (const m of t.matchAll(/\b([\d,]+(?:\.\d{1,2})?)\s*(?:rupees|rs\b|inr\b|bucks)/g)) tagged.push({ at: m.index, value: m[1] });
+  for (const m of t.matchAll(/\b(\d+(?:\.\d)?)\s*k\b/g)) tagged.push({ at: m.index, value: String(Math.round(Number(m[1]) * 1000)) });
+
+  let candidates = tagged.sort((a, b) => a.at - b.at).map((c) => c.value);
+  if (candidates.length === 0) {
+    // Dates, day numbers ("the 21st") and years were already removed by the caller.
+    candidates = [...t.matchAll(/\b(\d[\d,]*(?:\.\d{1,2})?)\b/g)].map((m) => m[1]);
+  }
+  return [...new Set(candidates.map((c) => parseRupees(c)).filter((p): p is number => p !== null && p > 0))];
 }
 
 function findDescription(text: string, lower: string, dateMatched?: string): string | null {
@@ -160,9 +209,14 @@ export function parseText(input: string, today: ISODate, source: CaptureSource =
     issues.push({ field: "date", message: "This date is in the future; check it." });
   }
 
+  const flags: ProposedTransaction["flags"] = {};
+  if (CARD_BILL.test(lower)) flags.cardBillPayment = true;
+
   let category: string | null = kind === "income" ? "income" : null;
   if (kind === "expense") {
     for (const [cat, re] of CATEGORY_KEYWORDS) {
+      // A card bill is not a one-off bill; its purchases are already categorised.
+      if (flags.cardBillPayment && cat === "bills") continue;
       if (re.test(lower)) {
         category = cat;
         break;
@@ -171,7 +225,11 @@ export function parseText(input: string, today: ISODate, source: CaptureSource =
     if (!category) issues.push({ field: "category", message: "Choose a category." });
   }
 
-  const description = findDescription(raw, lower, when.matched);
+  let description = findDescription(raw, lower, when.matched);
+  if (flags.cardBillPayment) {
+    const issuer = CARD_ISSUER_WORDS.find(([, re]) => re.test(lower));
+    description = issuer ? `${issuer[0]} credit card bill` : "Credit card bill";
+  }
   if (!description) issues.push({ field: "description", message: "Add a short description." });
 
   let paymentMethod: PaymentMethod | null = null;
@@ -182,10 +240,6 @@ export function parseText(input: string, today: ISODate, source: CaptureSource =
     }
   }
 
-  const flags: ProposedTransaction["flags"] = {};
-  if (/\b(credit ?card|cc|card)\s+(bill|dues|outstanding|payment)\b/.test(lower) && /\b(paid|pay|payment|cleared)\b/.test(lower)) {
-    flags.cardBillPayment = true;
-  }
   const sub = lower.match(SUBSCRIPTIONS);
   if (sub && kind === "expense") {
     const frequency = /\b(year|yearly|annual|annually)\b/.test(lower) ? "yearly" : /\bquarter/.test(lower) ? "quarterly" : "monthly";

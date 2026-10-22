@@ -243,8 +243,8 @@ function fakeSpeech(mode: { words?: string; error?: string }) {
       onend: (() => void) | null = null;
       start() {
         setTimeout(() => {
+          if (m.words) this.onresult?.({ results: [Object.assign([{ transcript: m.words }], { isFinal: false })] });
           if (m.error) this.onerror?.({ error: m.error });
-          else this.onresult?.({ results: [Object.assign([{ transcript: m.words }], { isFinal: false })] });
           this.onend?.();
         }, 50);
       }
@@ -282,4 +282,33 @@ test("voice explains when dictation is turned off", async ({ page }) => {
   await expect(text(page, /turn on Enable Dictation/)).toBeVisible();
   await expect(text(page, /code: service-not-allowed/)).toBeVisible();
   await expect(text(page, /use the microphone on your phone's keyboard/)).toBeVisible();
+});
+
+test("voice: a spoken correction and a card bill are understood, with no false error", async ({ page }) => {
+  // Safari sometimes reports "no speech" after it has already passed on the words.
+  const words = "My credit Card bill was 200 Something and no actually two hours 20,000 for ICIC";
+  await page.addInitScript(fakeSpeech({}), { words, error: "no-speech" });
+  await signIn(page);
+  await open(page, "/spending/smart");
+  await page.getByRole("button", { name: "Speak" }).click();
+  await page.getByRole("button", { name: "Start speaking" }).click();
+  await expect(page.getByRole("textbox")).toHaveValue(words);
+  await expect(text(page, /code: no-/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Read it" }).click();
+  await expect(text(page, "This looks like a credit-card bill payment")).toBeVisible();
+  await expect(review(page)).toContainText("ICICI credit card bill · ₹20,000");
+  // If it isn't a card bill, the user can still review it as ordinary spending.
+  await page.getByRole("button", { name: /Not a card bill/ }).click();
+  await expect(review(page).getByLabel("Amount (₹)")).toHaveValue("20000");
+  await expect(review(page)).toContainText("You corrected the amount");
+  await review(page).getByRole("button", { name: "Discard" }).click();
+});
+
+test("several amounts without a correction leave the amount for the user", async ({ page }) => {
+  await signIn(page);
+  await readIt(page, "dinner 450 and taxi 200 yesterday");
+  await expect(review(page)).toContainText("Several amounts found (₹450, ₹200)");
+  await expect(review(page).getByLabel("Amount (₹)")).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Confirm and save" })).toBeDisabled();
+  await review(page).getByRole("button", { name: "Discard" }).click();
 });

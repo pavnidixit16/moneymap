@@ -65,6 +65,7 @@ export function ReviewCard({
   const [result, setResult] = useState<ConfirmResult>({});
   const [ackDuplicates, setAckDuplicates] = useState(false);
   const [ackCard, setAckCard] = useState(false);
+  const [notCardBill, setNotCardBill] = useState(false);
   const [pending, startTransition] = useTransition();
   const draft = toDraft(proposal, values, clientRequestId);
 
@@ -108,7 +109,7 @@ export function ReviewCard({
     });
   }
 
-  if (proposal.flags.cardBillPayment) {
+  if (proposal.flags.cardBillPayment && !notCardBill) {
     return (
       <section aria-label="Review draft" className="flex flex-col gap-3 rounded-2xl border border-warning/50 bg-surface p-4">
         <p className="flex gap-2 font-semibold">
@@ -118,6 +119,10 @@ export function ReviewCard({
           Card purchases are counted as you log them, so saving the bill payment as spending would count the same money
           twice. Mark the card bill as paid under Commitments instead.
         </p>
+        <p className="rounded-xl bg-surface-2 p-2 text-sm">
+          Read as: <strong>{proposal.description || "Credit card bill"}</strong>
+          {proposal.amountPaise ? <> · {formatINR(proposal.amountPaise)}</> : null}
+        </p>
         <div className="flex flex-wrap gap-2">
           <Link href="/commitments?tab=upcoming" className="inline-flex h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-foreground">
             Go to Upcoming
@@ -126,6 +131,9 @@ export function ReviewCard({
             Discard
           </button>
         </div>
+        <button type="button" onClick={() => { setNotCardBill(true); setEditing(true); }} className="self-start text-sm font-semibold text-accent underline">
+          Not a card bill? Review it as spending
+        </button>
       </section>
     );
   }

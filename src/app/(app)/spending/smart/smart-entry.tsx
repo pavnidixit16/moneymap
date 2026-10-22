@@ -130,14 +130,18 @@ export function SmartEntry() {
     r.onresult = (e) => {
       heard = Array.from(e.results).map((res) => res[0].transcript).join(" ").trim();
       setText(heard);
+      if (heard) setVoiceError(null);
     };
     r.onerror = (e) => {
       if (e.error === "aborted") return; // the user tapped stop
+      // Safari can report "no speech" after it has already passed on words; keep the words.
+      if (heard && e.error === "no-speech") return;
       setVoiceError(`${VOICE_ERRORS[e.error] ?? "Voice input didn't work this time. Try again, or type instead."} (code: ${e.error})`);
     };
     r.onend = () => {
       setListening(false);
-      if (!heard) setVoiceError((prev) => prev ?? `${VOICE_ERRORS["no-speech"]} (code: no-result)`);
+      if (heard) setVoiceError(null);
+      else setVoiceError((prev) => prev ?? `${VOICE_ERRORS["no-speech"]} (code: no-result)`);
     };
     recognition.current = r;
     setListening(true);

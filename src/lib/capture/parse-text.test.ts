@@ -66,8 +66,10 @@ describe("parseText: uncertainty is reported, not invented", () => {
     expect(r.issues.map((i) => i.field).sort()).toEqual(["amount", "category", "date", "description"]);
   });
 
-  it("flags several amounts", () => {
-    expect(p("dinner 450 and taxi 200 yesterday").issues.map((i) => i.field)).toContain("amount");
+  it("never picks one of several amounts; the user chooses", () => {
+    const r = p("dinner 450 and taxi 200 yesterday");
+    expect(r.amountPaise).toBeNull();
+    expect(r.issues.find((i) => i.field === "amount")?.message).toContain("₹450, ₹200");
   });
 
   it("treats a date without a year that would be in the future as last year", () => {
@@ -79,10 +81,63 @@ describe("parseText: uncertainty is reported, not invented", () => {
   });
 });
 
+describe("parseText: spoken self-corrections", () => {
+  it.each([
+    ["dinner 200 no actually 2000", 200000],
+    ["dinner 200, no, 2000", 200000],
+    ["dinner 200 no 2000 yesterday", 200000],
+    ["groceries ₹500 sorry ₹5,000", 500000],
+    ["uber 300 I mean 350", 35000],
+    ["taxi 400 make that 450", 45000],
+    ["shoes not 2000 but 3000", 300000],
+    ["coffee 250, wait, 280", 28000],
+    ["lunch 1k actually 1.5k", 150000],
+  ])("%s → the corrected amount", (text, paise) => {
+    const r = p(text);
+    expect(r.amountPaise).toBe(paise);
+    expect(r.issues.find((i) => i.field === "amount")?.message).toMatch(/You corrected the amount/);
+  });
+
+  it("reads the voice transcript from testing as a ₹20,000 ICICI card bill", () => {
+    const r = parseText("My credit Card bill was 200 Something and no actually two hours 20,000 for ICIC", TODAY, "voice");
+    expect(r.amountPaise).toBe(2000000);
+    expect(r.flags.cardBillPayment).toBe(true);
+    expect(r.category).not.toBe("bills");
+    expect(r.description).toBe("ICICI credit card bill");
+  });
+
+  it("reads amounts that look like years, and ignores dates", () => {
+    expect(p("dinner 200 no actually 2050").amountPaise).toBe(205000);
+    expect(p("rent deposit 2026 paid on 3rd").amountPaise).toBe(202600);
+    expect(p("hotel 9000 on 15 Oct 2026").amountPaise).toBe(900000);
+    expect(p("supermarket 500 yesterday").amountPaise).toBe(50000);
+    expect(p("supermarket 500 yesterday").occurredOn).toBe("2026-10-21");
+  });
+
+  it("does not treat ordinary words as corrections", () => {
+    expect(p("Actually spent 450 on dinner").amountPaise).toBe(45000);
+    expect(p("no cost emi 1500 for phone").amountPaise).toBe(150000);
+  });
+});
+
 describe("parseText: special cases", () => {
   it("marks a credit-card bill payment so it isn't saved as spending", () => {
     expect(p("Paid credit card bill 18,000 today").flags.cardBillPayment).toBe(true);
     expect(p("dinner 450 on credit card").flags.cardBillPayment).toBeUndefined();
+    expect(p("dinner 450 paid by card").flags.cardBillPayment).toBeUndefined();
+    expect(p("electricity bill 1800").flags.cardBillPayment).toBeUndefined();
+  });
+
+  it.each([
+    ["credit card bill was 20,000", "Credit card bill"],
+    ["HDFC card bill 12500 due", "HDFC credit card bill"],
+    ["paid the bill for my SBI credit card 8000", "SBI credit card bill"],
+    ["cc payment 15000 axis", "Axis credit card bill"],
+  ])("recognises a card bill: %s", (text, description) => {
+    const r = p(text);
+    expect(r.flags.cardBillPayment).toBe(true);
+    expect(r.description).toBe(description);
+    expect(r.category).not.toBe("bills");
   });
 
   it("suggests, but does not create, a subscription", () => {

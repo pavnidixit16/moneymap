@@ -406,6 +406,10 @@ None of these change the calculation rules R1–R10 or the database access rules
   `commitments.interest_rate_bps` (FD interest, display only).
 - **Rules:** statement balances and opening/closing rows are never transactions; credit-card bill
   payments are not saved as spending; card purchases warn when the card bill is counted;
-  subscriptions are suggestions only. Calculation rules R1–R10 are unchanged.
+  subscriptions are suggestions only. When a sentence has several amounts, the amount is left
+  blank for the user to enter, unless they corrected themselves ("200, no actually 2,000",
+  "make that 450", "not 200 but 300"); then the corrected amount is used and flagged for
+  review. A card-bill draft can be switched back to ordinary spending if it was misread.
+  Calculation rules R1–R10 are unchanged.
 - Future sources (Gmail, Android SMS, bank feeds) are documented in `docs/INTEGRATIONS.md` and
   disabled in this release.
