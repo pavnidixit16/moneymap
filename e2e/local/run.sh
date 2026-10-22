@@ -17,7 +17,7 @@ for f in supabase/migrations/*.sql; do $PSQL -d $DB -f "$f"; done
 $PSQL -d $DB -f e2e/local/setup.sql
 
 # Free the ports in case an earlier run was interrupted.
-for port in 3001 3100 54321; do fuser -k "$port/tcp" >/dev/null 2>&1 || true; done
+for port in 3001 3100 3200 54321; do fuser -k "$port/tcp" >/dev/null 2>&1 || true; done
 
 pids=()
 cleanup() { kill "${pids[@]}" 2>/dev/null || true; }
@@ -27,6 +27,12 @@ PGRST_DB_URI="postgres://authenticator:authenticator@127.0.0.1:$PGPORT/$DB" \
 PGRST_DB_SCHEMAS=public PGRST_DB_ANON_ROLE=anon PGRST_JWT_SECRET="$JWT_SECRET" \
 PGRST_SERVER_PORT=3001 PGRST_DB_POOL=5 "$POSTGREST_BIN" > /tmp/moneymap-postgrest.log 2>&1 & pids+=($!)
 GATEWAY_LOG=1 node e2e/local/gateway.mjs > /tmp/moneymap-gateway.log 2>&1 & pids+=($!)
+node e2e/local/fake-google.mjs > /tmp/moneymap-fake-google.log 2>&1 & pids+=($!)
+
+# Gmail, pointed at the stand-in Google server. Test-only values, not real credentials.
+export GMAIL_CLIENT_ID=test-client GMAIL_CLIENT_SECRET=test-secret
+export GMAIL_TOKEN_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+export GMAIL_TEST_GOOGLE_BASE=http://localhost:3200
 
 export NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_localtest

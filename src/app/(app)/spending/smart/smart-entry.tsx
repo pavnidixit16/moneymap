@@ -1,6 +1,6 @@
 "use client";
 
-import { FileUp, Keyboard, Mic, MicOff, Sparkles } from "lucide-react";
+import { FileUp, Keyboard, Mail, Mic, MicOff, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SuccessNote, inputClass, primaryButton } from "@/components/ui";
@@ -11,10 +11,12 @@ import type { ProposedTransaction } from "@/lib/capture/types";
 import { istToday } from "@/lib/engine/dates";
 import { formatDate } from "@/lib/format";
 import { formatINR } from "@/lib/money";
+import { GmailPanel } from "./gmail-panel";
+import type { GmailStatus } from "./gmail-actions";
 import { ImportReview } from "./import-review";
 import { ReviewCard, valuesFrom, type DraftValues } from "./review-card";
 
-type Tab = "type" | "speak" | "upload";
+type Tab = "type" | "speak" | "upload" | "gmail";
 interface Draft {
   proposal: ProposedTransaction;
   values: DraftValues;
@@ -73,9 +75,9 @@ function speechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-export function SmartEntry() {
+export function SmartEntry({ gmail, initialTab = "type", gmailResult }: { gmail: GmailStatus; initialTab?: Tab; gmailResult?: string }) {
   const hydrated = useHydrated();
-  const [tab, setTab] = useState<Tab>("type");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [restored, setRestored] = useState(false);
@@ -196,6 +198,7 @@ export function SmartEntry() {
     { key: "type", label: "Type", icon: Keyboard },
     { key: "speak", label: "Speak", icon: Mic },
     { key: "upload", label: "Statement", icon: FileUp },
+    ...(gmail.available ? [{ key: "gmail" as const, label: "Gmail", icon: Mail }] : []),
   ];
 
   if (draft) {
@@ -232,7 +235,7 @@ export function SmartEntry() {
         </SuccessNote>
       )}
 
-      <nav aria-label="Ways to add" className="grid grid-cols-3 gap-1 rounded-full border border-border bg-surface p-1">
+      <nav aria-label="Ways to add" className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"} gap-1 rounded-full border border-border bg-surface p-1`}>
         {tabs.map(({ key, label, icon: TabIcon }) => (
           <button
             key={key}
@@ -246,7 +249,7 @@ export function SmartEntry() {
         ))}
       </nav>
 
-      {tab !== "upload" && (
+      {(tab === "type" || tab === "speak") && (
         <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
           {tab === "speak" &&
             (Recognition ? (
@@ -318,6 +321,7 @@ export function SmartEntry() {
       )}
 
       {tab === "upload" && <ImportReview />}
+      {tab === "gmail" && <GmailPanel status={gmail} connectResult={gmailResult} />}
 
     </div>
   );

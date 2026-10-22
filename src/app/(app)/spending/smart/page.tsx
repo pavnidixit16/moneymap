@@ -1,8 +1,16 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/ui";
+import { Suspense } from "react";
+import { PageHeader, Skeleton } from "@/components/ui";
+import { getGmailStatus } from "./gmail-actions";
 import { SmartEntry } from "./smart-entry";
 
-export default function SmartAddPage() {
+async function SmartEntryLoader({ searchParams }: { searchParams: Promise<{ tab?: string; gmail?: string }> }) {
+  const [params, gmail] = await Promise.all([searchParams, getGmailStatus()]);
+  const tab = params.tab === "gmail" && gmail.available ? "gmail" : "type";
+  return <SmartEntry key={params.gmail ?? "smart"} gmail={gmail} initialTab={tab} gmailResult={params.gmail} />;
+}
+
+export default function SmartAddPage({ searchParams }: { searchParams: Promise<{ tab?: string; gmail?: string }> }) {
   return (
     <>
       <PageHeader
@@ -14,7 +22,9 @@ export default function SmartAddPage() {
           </Link>
         }
       />
-      <SmartEntry />
+      <Suspense fallback={<Skeleton className="h-64" />}>
+        <SmartEntryLoader searchParams={searchParams} />
+      </Suspense>
     </>
   );
 }

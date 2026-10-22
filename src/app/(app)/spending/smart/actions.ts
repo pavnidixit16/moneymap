@@ -28,12 +28,17 @@ export interface ConfirmResult {
 
 type Supabase = Awaited<ReturnType<typeof requireUser>>["supabase"];
 
-// Which of these statement-row references are already saved. Asked in batches so the
-// request stays short even for a 500-row statement.
-async function importedRefs(supabase: Supabase, refs: string[]): Promise<Set<string>> {
+// Sources that save several rows at once, each with a stable reference (statement-row
+// fingerprint or Gmail message id).
+export type BatchSource = "document" | "gmail";
+const isBatchSource = (s: unknown): s is BatchSource => s === "document" || s === "gmail";
+
+// Which of these references are already saved. Asked in batches so the request stays
+// short even for a 500-row statement.
+async function importedRefs(supabase: Supabase, source: BatchSource, refs: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (let i = 0; i < refs.length; i += 50) {
-    const { data } = await supabase.from("transactions").select("source_ref").eq("source", "document").in("source_ref", refs.slice(i, i + 50));
+    const { data } = await supabase.from("transactions").select("source_ref").eq("source", source).in("source_ref", refs.slice(i, i + 50));
     for (const r of data ?? []) found.add(r.source_ref);
   }
   return found;
@@ -119,11 +124,14 @@ export interface ImportResult {
 
 // Possible duplicates for statement rows: matching entries that did not come from this
 // import path, so the user can untick them before saving.
-export async function checkImportDuplicates(rows: { key: string; kind: "expense" | "income"; amountPaise: number; occurredOn: string; sourceRef: string }[]) {
+export async function checkImportDuplicates(
+  rows: { key: string; kind: "expense" | "income"; amountPaise: number; occurredOn: string; sourceRef: string }[],
+  source: BatchSource = "document",
+) {
   const { supabase } = await requireUser();
-  if (!Array.isArray(rows) || rows.length === 0 || rows.length > 500) return { duplicateKeys: [] as string[], importedKeys: [] as string[] };
+  if (!isBatchSource(source) || !Array.isArray(rows) || rows.length === 0 || rows.length > 500) return { duplicateKeys: [] as string[], importedKeys: [] as string[] };
 
-  const alreadyIn = await importedRefs(supabase, rows.map((r) => r.sourceRef));
+  const alreadyIn = await importedRefs(supabase, source, rows.map((r) => r.sourceRef));
 
   const dates = rows.map((r) => r.occurredOn).sort();
   const { data: existing } = await supabase
@@ -131,7 +139,7 @@ export async function checkImportDuplicates(rows: { key: string; kind: "expense"
     .select("kind, amount_paise, occurred_on, source")
     .gte("occurred_on", addDays(dates[0], -DUPLICATE_WINDOW_DAYS))
     .lte("occurred_on", addDays(dates[dates.length - 1], DUPLICATE_WINDOW_DAYS))
-    .neq("source", "document");
+    .neq("source", source);
   const duplicateKeys = rows
     .filter((r) =>
       (existing ?? []).some(
@@ -146,10 +154,11 @@ export async function checkImportDuplicates(rows: { key: string; kind: "expense"
   return { duplicateKeys, importedKeys: rows.filter((r) => alreadyIn.has(r.sourceRef)).map((r) => r.key) };
 }
 
-// Saves the statement rows the user ticked. Rows already imported are skipped (database
-// constraint on source_ref), so re-importing a statement never duplicates anything.
-export async function confirmImport(drafts: unknown[]): Promise<ImportResult> {
+// Saves the statement rows or Gmail drafts the user ticked. Rows already imported are
+// skipped (database constraint on source_ref), so re-importing never duplicates anything.
+export async function confirmImport(drafts: unknown[], source: BatchSource = "document"): Promise<ImportResult> {
   const { supabase } = await requireUser();
+  if (!isBatchSource(source)) return { error: "Unknown source." };
   if (!Array.isArray(drafts) || drafts.length === 0) return { error: "Select at least one row to save." };
   if (drafts.length > 500) return { error: "Too many rows at once." };
 
@@ -158,11 +167,11 @@ export async function confirmImport(drafts: unknown[]): Promise<ImportResult> {
   let invalid = 0;
   for (const d of drafts) {
     const r = schema.safeParse(d);
-    if (r.success && r.data.source === "document" && r.data.source_ref) rows.push(r.data);
+    if (r.success && r.data.source === source && r.data.source_ref) rows.push(r.data);
     else invalid += 1;
   }
 
-  const done = await importedRefs(supabase, rows.map((r) => r.source_ref!));
+  const done = await importedRefs(supabase, source, rows.map((r) => r.source_ref!));
   const fresh = rows.filter((r) => !done.has(r.source_ref!));
   let alreadyImported = rows.length - fresh.length;
   let saved = 0;

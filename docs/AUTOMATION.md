@@ -9,7 +9,7 @@ before relying on them.
 | Area | Status | Evidence |
 |---|---|---|
 | Google sign-in | **Implemented** (identity only) | `src/app/login/google-button.tsx` calls `signInWithOAuth({ provider: "google" })` with no extra scopes. `src/app/privacy/page.tsx` says "We do not request access to Gmail". |
-| Gmail integration | **Missing** | No Gmail API client, OAuth scope, token table or route. `src/lib/capture/sources.ts` lists `gmail` as `available: false`. Only the name is reserved: `SOURCES` in `src/lib/capture/types.ts` and the `transactions.source` check in `supabase/migrations/20261023000005_smart_entry.sql`. |
+| Gmail integration | **Built, Testing mode** (phase 1). Off unless the three Vercel settings exist | Routes `src/app/api/gmail/{connect,callback}`, actions `src/app/(app)/spending/smart/gmail-actions.ts`, UI `gmail-panel.tsx` + `batch-review.tsx`, library `src/lib/gmail/*`, migration 6, tests `e2e/gmail.spec.ts` against `e2e/local/fake-google.mjs`. |
 | SMS | **Missing** (paste only) | Users can paste an SMS into Smart add, which `parseText` reads (`src/lib/capture/parse-text.ts`). Nothing reads SMS automatically. `sms` is `available: false`. |
 | Message detection | **Implemented now** | `src/lib/capture/detect-message.ts` and its tests: bank and merchant sender rules, OTP, failed-payment and advert filtering, and card statements routed to Commitments. Used today for pasted text. Gmail and SMS will use it later. |
 | Duplicate protection for imports | **Implemented** | `unique (user_id, source, source_ref)` and `unique (user_id, client_request_id)` on `transactions` (migration 5). Gmail message ids will be the `source_ref`. |
@@ -52,14 +52,14 @@ Recommended for after the demo.
 5. The user reviews each draft with the existing review card. Confirming uses `confirmDraft` with `source = 'gmail'` and `source_ref = <message id>`. Nothing is ever saved without that tap.
 6. **Disconnect** revokes the token at Google, deletes the stored token, and optionally deletes pending Gmail drafts. If Google returns `invalid_grant` (expired, or revoked in the Google account), the app shows "Reconnect Gmail".
 
-### Data (additive migration 6, not written yet)
-- `gmail_connections`: `user_id` (pk), `google_email`, `encrypted_refresh_token`, `scope`, `connected_at`, `last_scan_at`, `status`.
-  - RLS: owner only, with `anon` revoked.
-  - The token column only ever holds ciphertext. The key never reaches the database or the browser.
-- `capture_inbox`: `id`, `user_id`, `source`, `source_ref`, `detection` (jsonb: the proposed draft plus at most a 500-character snippet for the user's reference), `status` (`pending` / `dismissed` / `saved`), `created_at`.
-  - `unique (user_id, source, source_ref)`: re-scans never duplicate, and dismissed items stay dismissed.
-  - RLS: owner only.
-- Logging: never log message bodies, snippets, tokens or amounts. Errors log only a code and the message id.
+### Data (migration 6, as built)
+No email content is stored. Drafts are built while the user is looking at them and
+live only in the browser until confirmed.
+- `gmail_connections`: `user_id` (pk), `google_email`, `encrypted_refresh_token` (AES-256-GCM, user id bound in), `scope`, `status`, `connected_at`, `last_checked_at`. RLS owner only, `anon` revoked. The key is only in Vercel.
+- `gmail_dismissed`: `user_id`, `message_id`, `dismissed_at`. Message ids of hidden emails only, so they aren't proposed again. RLS owner only.
+- Confirmed drafts: ordinary `transactions` with `source = 'gmail'` and `source_ref` = message id. The existing unique constraint means the same email can never be saved twice.
+- Disconnect revokes at Google and deletes both Gmail tables' rows for the user. Confirmed transactions stay.
+- Logging: nothing from emails, and no tokens, is logged.
 
 ### Configuration you will do (after approving)
 1. Create a new Google Cloud project, e.g. "MoneyMap Gmail testing". Enable the **Gmail API**.
@@ -96,7 +96,7 @@ Recommended for after the demo.
 | Phase | Content | Needs from you |
 |---|---|---|
 | 0 — done | `detect-message.ts` and tests. Pasted OTPs, failed payments, adverts and card statements are explained instead of becoming drafts. | Nothing |
-| 1 — Gmail (Testing mode) | Migration 6, Connect / scan / disconnect behind a flag (off unless the Gmail env vars exist), inbox review, privacy page update, local tests against a fake Google server | Approval; Google Cloud and Vercel steps above; apply migration 6 |
+| 1 — Gmail (Testing mode), **built** | Migration 6, Connect / check / hide / disconnect (off unless the Gmail env vars exist), list review, privacy page update, local tests against a stand-in Google server | Google Cloud and Vercel steps in docs/SETUP.md; apply migration 6 |
 | 2 — phone capture | iPhone Shortcut capture link, Android share target, manifest | Approval |
 | 3 — notifications | N1–N5 above, then N6 | Approval; VAPID keys and, for N6, a server secret set in Vercel |
 

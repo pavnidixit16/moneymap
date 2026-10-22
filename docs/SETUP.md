@@ -132,3 +132,65 @@ npm install
 npm run dev                  # http://localhost:3000
 npm test                     # calculation and helper tests
 ```
+
+## Gmail (Testing mode, optional)
+
+Gmail stays switched off until all three Vercel settings below exist. Do the steps in
+order. Never paste the client secret or token key anywhere except Vercel.
+
+### Part A: Supabase, migration 6 (two new tables; nothing existing changes)
+1. Supabase → **SQL Editor** → **New query**.
+2. Paste the whole of `supabase/migrations/20261024000006_gmail.sql` → **Run**.
+   Expect "Success. No rows returned". Run it once only.
+3. **Check:** new query → paste the whole of `supabase/tests/rls_isolation.sql` → **Run**.
+   It ends with `ALL CHECKS PASSED`, and the messages include
+   "PASS: Gmail connections and hidden messages are private to each user".
+
+### Part B: Google Cloud, a separate project (sign-in is not touched)
+1. <https://console.cloud.google.com> → project picker (top left) → **New project** →
+   name `MoneyMap Gmail Testing` → **Create**, then select it in the project picker.
+2. **APIs & Services → Library** → search **Gmail API** → **Enable**.
+3. **Google Auth Platform** (or "OAuth consent screen") → **Get started**:
+   app name `MoneyMap (testing)`, support email = your Gmail, Audience **External**,
+   contact email = your Gmail → agree → **Create**.
+4. **Branding**: Application home page `https://moneymap-ten-bay.vercel.app`,
+   privacy policy `https://moneymap-ten-bay.vercel.app/privacy` → **Save**. If it asks
+   for an authorised domain and refuses `vercel.app`, leave it empty; Testing mode
+   doesn't need it.
+5. **Audience**: leave the status as **Testing**. Do **not** click "Publish app".
+   **Test users → Add users**: your Gmail and each tester's Gmail → **Save**.
+6. **Data Access → Add or remove scopes**: filter `gmail.readonly`, tick
+   `https://www.googleapis.com/auth/gmail.readonly` → **Update** → **Save**. Add no
+   other scopes.
+7. **Clients → Create client** → type **Web application** → name `MoneyMap Gmail` →
+   **Authorised redirect URIs → Add URI**:
+   `https://moneymap-ten-bay.vercel.app/api/gmail/callback` → **Create**.
+   A box shows the **Client ID** and **Client secret**. Keep it open for Part C.
+
+### Part C: Vercel, three environment variables
+Vercel → the MoneyMap project → **Settings → Environment Variables**. For each one:
+**Add new**, environment **Production**, then **Save**.
+
+| Key | Value | Sensitive |
+|---|---|---|
+| `GMAIL_CLIENT_ID` | the Client ID from B7 (ends in `.apps.googleusercontent.com`) | optional |
+| `GMAIL_CLIENT_SECRET` | the Client secret from B7 | **yes** |
+| `GMAIL_TOKEN_KEY` | on your Mac, open **Terminal** and run `openssl rand -base64 32`; paste the line it prints | **yes** |
+
+The token key encrypts stored Google tokens. If it's ever lost or changed, nothing
+breaks: everyone just taps "Reconnect Gmail".
+
+Then **Deployments** → the latest one → **⋯ → Redeploy**, so it picks up the settings.
+
+### Check (on your phone)
+1. Smart add shows a fourth tab, **Gmail**. Tap it → **Connect Gmail**.
+2. Google warns "Google hasn't verified this app": tap **Continue** (this is expected
+   in Testing mode). Leave the Gmail box ticked → **Continue**.
+3. You're back on Smart add: "Gmail connected", with your address.
+4. **Check Gmail now** → review the list → save one → check again: it is not offered
+   again.
+5. **Disconnect Gmail** → then Google Account → Security → Third-party connections:
+   MoneyMap is no longer listed.
+
+Testing-mode limits: only listed test users can connect, Google shows the unverified
+warning, and access expires after about 7 days (the app then asks to reconnect).

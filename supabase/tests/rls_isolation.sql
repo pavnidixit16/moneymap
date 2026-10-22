@@ -274,6 +274,43 @@ do $$ begin
 end $$;
 select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
 
+-- ---------------------------------------------------------------- migration 6 Gmail (A, then B)
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$ begin
+  insert into public.gmail_connections (google_email, encrypted_refresh_token, scope)
+  values ('a@example.invalid', 'v1.ciphertext-for-test-only-000000', 'https://www.googleapis.com/auth/gmail.readonly');
+  insert into public.gmail_dismissed (message_id) values ('18c2f0a1b2c3d4e5');
+  begin
+    insert into public.gmail_dismissed (message_id) values ('not a gmail id!');
+    raise exception 'FAIL: malformed Gmail message id accepted';
+  exception when check_violation then null; end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
+do $$ begin
+  if (select count(*) from public.gmail_connections) <> 0 or (select count(*) from public.gmail_dismissed) <> 0 then
+    raise exception 'FAIL: user B can see user A''s Gmail connection or hidden messages';
+  end if;
+  update public.gmail_connections set status = 'needs_reconnect';
+  delete from public.gmail_dismissed;
+  begin
+    insert into public.gmail_connections (user_id, google_email, encrypted_refresh_token, scope)
+    values ('aaaaaaaa-0000-4000-8000-000000000001', 'b@example.invalid', 'v1.ciphertext-for-test-only-000000', 'x');
+    raise exception 'FAIL: user B wrote a Gmail connection for user A';
+  exception when insufficient_privilege then null; end;
+  begin
+    insert into public.gmail_dismissed (user_id, message_id) values ('aaaaaaaa-0000-4000-8000-000000000001', '18c2f0a1b2c3d4e6');
+    raise exception 'FAIL: user B hid a message for user A';
+  exception when insufficient_privilege then null; end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$ begin
+  if (select status from public.gmail_connections) <> 'connected' or (select count(*) from public.gmail_dismissed) <> 1 then
+    raise exception 'FAIL: user B changed user A''s Gmail rows';
+  end if;
+  raise notice 'PASS: Gmail connections and hidden messages are private to each user';
+end $$;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
+
 -- ---------------------------------------------------------------- anonymous visitor
 reset role;
 set local role anon;
@@ -282,7 +319,7 @@ select set_config('request.jwt.claims', '', true);
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles', 'transactions', 'commitments', 'commitment_payments'] loop
+  foreach t in array array['profiles', 'transactions', 'commitments', 'commitment_payments', 'gmail_connections', 'gmail_dismissed'] loop
     begin
       execute format('select count(*) from public.%I', t);
       raise exception 'FAIL: anonymous visitor could query %', t;
