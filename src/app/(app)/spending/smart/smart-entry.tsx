@@ -21,6 +21,16 @@ interface Draft {
 
 const STORAGE_KEY = "moneymap.smart-draft";
 
+// Plain-language explanations for the browser's speech-recognition error codes.
+const VOICE_ERRORS: Record<string, string> = {
+  "not-allowed": "Microphone permission was denied. Allow it for this site in your browser settings, or type instead.",
+  "service-not-allowed": "Speech recognition is turned off on this device. On iPhone: Settings → General → Keyboard → turn on Enable Dictation. Or type instead.",
+  "no-speech": "Didn't catch anything. Tap the microphone and start speaking straight away.",
+  "audio-capture": "No microphone was found. Check your microphone, or type instead.",
+  network: "The speech service couldn't be reached. Check your connection, or type instead.",
+  "language-not-supported": "Speech recognition for Indian English isn't available in this browser. Type instead.",
+};
+
 // Browser storage is a convenience only: it keeps an unsaved draft if a save fails or the
 // page reloads. It never stands in for saving.
 function loadDraft(): Draft | null {
@@ -44,7 +54,7 @@ interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
@@ -112,17 +122,31 @@ export function SmartEntry() {
     setVoiceError(null);
     const r = new Recognition();
     r.lang = "en-IN";
-    r.interimResults = false;
+    // Live results: iPhone Safari often ends a session without a "final" result, so keep
+    // whatever was heard as it arrives.
+    r.interimResults = true;
     r.continuous = false;
+    let heard = "";
     r.onresult = (e) => {
-      const transcript = Array.from(e.results).map((res) => res[0].transcript).join(" ");
-      setText(transcript);
+      heard = Array.from(e.results).map((res) => res[0].transcript).join(" ").trim();
+      setText(heard);
     };
-    r.onerror = (e) => setVoiceError(e.error === "not-allowed" ? "Microphone permission was denied. Allow it in your browser settings, or type instead." : "Couldn't hear that. Try again or type instead.");
-    r.onend = () => setListening(false);
+    r.onerror = (e) => {
+      if (e.error === "aborted") return; // the user tapped stop
+      setVoiceError(`${VOICE_ERRORS[e.error] ?? "Voice input didn't work this time. Try again, or type instead."} (code: ${e.error})`);
+    };
+    r.onend = () => {
+      setListening(false);
+      if (!heard) setVoiceError((prev) => prev ?? `${VOICE_ERRORS["no-speech"]} (code: no-result)`);
+    };
     recognition.current = r;
     setListening(true);
-    r.start();
+    try {
+      r.start();
+    } catch {
+      setListening(false);
+      setVoiceError("Voice input couldn't start. Tap the microphone again, or type instead.");
+    }
   }
 
   const tabs: { key: Tab; label: string; icon: typeof Keyboard }[] = [
@@ -190,7 +214,11 @@ export function SmartEntry() {
                   Your browser converts speech to text, which may use Apple&apos;s or Google&apos;s speech service. Check the text
                   below before continuing.
                 </p>
-                {voiceError && <p role="alert" className="text-sm text-danger">{voiceError}</p>}
+                {voiceError && <p role="alert" className="text-center text-sm text-danger">{voiceError}</p>}
+                <p className="text-center text-xs text-muted">
+                  Voice not working? Tap the box below and use the microphone on your phone&apos;s keyboard to dictate. It works
+                  in every browser.
+                </p>
               </div>
             ) : (
               <p className="rounded-xl bg-surface-2 p-3 text-sm">

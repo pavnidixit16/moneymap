@@ -126,6 +126,7 @@ test("subscriptions: totals, keep/review/cancel, reactivate and price increase",
   await page.getByRole("link", { name: /Streaming subscription/ }).click();
   await label(page, /Amount each time/).fill("799");
   await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(/tab=all/); // saved and redirected
   await open(page, "/subscriptions");
   await expect(text(page, /Price up from ₹649/)).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/waste|unnecessary/i);

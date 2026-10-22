@@ -14,6 +14,7 @@ subscriptions. Mix iPhone and Android.
 > **Link:** https://moneymap-ten-bay.vercel.app (open on your phone, sign in with Google)
 >
 > Good to know:
+> - Google will say "continue to …supabase.co": that's our secure sign-in provider.
 > - No bank access; it never asks for passwords, PINs or OTPs.
 > - Approximate amounts are completely fine. Please don't enter account or card numbers.
 > - It's a prototype: as the builder I can technically see what's stored, and I'll delete

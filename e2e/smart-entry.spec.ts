@@ -229,3 +229,57 @@ test("smart add fits a 360px-wide phone", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(0);
   await review(page).getByRole("button", { name: "Discard" }).click();
 });
+
+// A stand-in for the browser speech engine, behaving like iPhone Safari: it reports live
+// words and then ends without a "final" result, or fails with a given error code.
+function fakeSpeech(mode: { words?: string; error?: string }) {
+  return (m: { words?: string; error?: string }) => {
+    class FakeRecognition {
+      lang = "";
+      interimResults = false;
+      continuous = false;
+      onresult: ((e: unknown) => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        setTimeout(() => {
+          if (m.error) this.onerror?.({ error: m.error });
+          else this.onresult?.({ results: [Object.assign([{ transcript: m.words }], { isFinal: false })] });
+          this.onend?.();
+        }, 50);
+      }
+      stop() {
+        this.onend?.();
+      }
+    }
+    // @ts-expect-error -- test double (replace both the standard and the WebKit name)
+    window.SpeechRecognition = FakeRecognition;
+    // @ts-expect-error -- test double
+    window.webkitSpeechRecognition = FakeRecognition;
+    void mode;
+  };
+}
+
+test("voice keeps live words even without a final result", async ({ page }) => {
+  await page.addInitScript(fakeSpeech({}), { words: "uber 200 rupees today" });
+  await signIn(page);
+  await open(page, "/spending/smart");
+  await page.getByRole("button", { name: "Speak" }).click();
+  await page.getByRole("button", { name: "Start speaking" }).click();
+  await expect(page.getByRole("textbox")).toHaveValue("uber 200 rupees today");
+  await page.getByRole("button", { name: "Read it" }).click();
+  await expect(review(page)).toContainText("₹200");
+  await expect(review(page)).toContainText("Voice");
+  await review(page).getByRole("button", { name: "Discard" }).click();
+});
+
+test("voice explains when dictation is turned off", async ({ page }) => {
+  await page.addInitScript(fakeSpeech({}), { error: "service-not-allowed" });
+  await signIn(page);
+  await open(page, "/spending/smart");
+  await page.getByRole("button", { name: "Speak" }).click();
+  await page.getByRole("button", { name: "Start speaking" }).click();
+  await expect(text(page, /turn on Enable Dictation/)).toBeVisible();
+  await expect(text(page, /code: service-not-allowed/)).toBeVisible();
+  await expect(text(page, /use the microphone on your phone's keyboard/)).toBeVisible();
+});
