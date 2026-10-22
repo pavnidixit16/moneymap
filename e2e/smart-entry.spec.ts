@@ -353,3 +353,16 @@ test("voice: several expenses in one go are reviewed one at a time", async ({ pa
   await review(page).getByRole("button", { name: "Discard" }).click();
   await expect(page.getByRole("button", { name: "Start speaking" })).toBeVisible();
 });
+
+test("unsure details are fixed right on the card, without opening Edit", async ({ page }) => {
+  await signIn(page);
+  await readIt(page, "350 for something");
+  const confirm = review(page).getByRole("button", { name: "Confirm and save" });
+  await expect(confirm).toBeDisabled();
+  await expect(review(page)).toContainText("Choose a category to save.");
+  await review(page).getByLabel("Category").selectOption("shopping");
+  await review(page).getByLabel("Date").fill(addDays(today, -2));
+  await expect(page.getByRole("button", { name: "Done editing" })).toHaveCount(0);
+  await confirm.click();
+  await expect(text(page, /Saved ₹350 · Shopping/)).toBeVisible();
+});

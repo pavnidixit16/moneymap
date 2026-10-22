@@ -23,6 +23,8 @@ describe("parseText: everyday sentences", () => {
     ["movie tickets 2k on 18 Oct", { amount: 200000, date: "2026-10-18", category: "entertainment" }],
     ["pharmacy ₹ 640 on 5/10", { amount: 64000, date: "2026-10-05", category: "healthcare" }],
     ["haircut 300 cash day before yesterday", { amount: 30000, date: "2026-10-20", category: "personal_care", method: "cash" }],
+    ["I spent 900 on dining", { amount: 90000, category: "food" }],
+    ["350 on a bedsheet", { amount: 35000, category: "shopping" }],
     ["electricity bill 1800 paid via net banking on Oct 3", { amount: 180000, date: "2026-10-03", category: "bills", method: "net_banking" }],
   ])("%s", (text, expected) => {
     expect(fields(text)).toMatchObject(expected);

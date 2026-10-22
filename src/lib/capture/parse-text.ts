@@ -17,10 +17,10 @@ const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frida
 // Keyword → category. Checked in order; first match wins.
 const CATEGORY_KEYWORDS: [string, RegExp][] = [
   ["groceries", /\b(grocer(?:y|ies)|bigbasket|big basket|blinkit|zepto|instamart|dmart|d-mart|vegetables?|sabzi|kirana|milk)\b/],
-  ["food", /\b(dinner|lunch|breakfast|brunch|food|meal|restaurant|cafe|coffee|tea|snacks?|swiggy|zomato|pizza|burger|biryani|starbucks|dominos|domino's|mcdonald'?s|kfc|eat(?:ing)? out|drinks?)\b/],
+  ["food", /\b(dinner|lunch|breakfast|brunch|food|meal|restaurant|cafe|coffee|tea|snacks?|swiggy|zomato|pizza|burger|biryani|starbucks|dominos|domino's|mcdonald'?s|kfc|eat(?:ing)? out|dining|dine|dined|drinks?)\b/],
   ["transport", /\b(uber|ola|rapido|cab|taxi|auto|rickshaw|metro|bus|petrol|diesel|fuel|parking|toll|fastag)\b/],
   ["travel", /\b(flight|hotel|irctc|train ticket|train|makemytrip|goibibo|airbnb|trip|holiday|indigo|air india)\b/],
-  ["shopping", /\b(amazon|flipkart|myntra|ajio|nykaa|meesho|shopping|clothes|shoes|shirt|dress|electronics|gadget)\b/],
+  ["shopping", /\b(amazon|flipkart|myntra|ajio|nykaa|meesho|shopping|clothes|shoes|shirt|dress|electronics|gadget|bed ?sheets?|pillows?|curtains?|towels?|furniture|utensils|home decor|decor|appliances?)\b/],
   ["entertainment", /\b(movie|movies|cinema|bookmyshow|pvr|inox|concert|game|gaming|party)\b/],
   ["healthcare", /\b(pharmacy|medicine|medicines|doctor|hospital|clinic|apollo|1mg|pharmeasy|netmeds|lab test|dentist)\b/],
   ["personal_care", /\b(salon|haircut|spa|parlour|parlor|grooming)\b/],

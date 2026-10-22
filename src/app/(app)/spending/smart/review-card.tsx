@@ -142,10 +142,21 @@ export function ReviewCard({
   const needs = (field: ProposalField, key: string) => (issuesFor(field).length > 0 || errors[key]) ? (
     <span className="text-xs text-warning">{errors[key] ?? issuesFor(field)[0].message}</span>
   ) : null;
+  // Details MoneyMap wasn't sure about can be fixed right on the card, without opening Edit.
+  const unsure = (field: ProposalField) => issuesFor(field).length > 0;
   const hasDuplicates = (result.duplicates?.length ?? 0) > 0;
   const canConfirm =
     hydrated && !pending && Boolean(parseRupees(values.amount)) && values.description.trim() !== "" && (values.kind === "income" || values.category !== "") &&
     (!hasDuplicates || ackDuplicates) && (!result.cardWarning || ackCard);
+
+  function blockedReason() {
+    if (!parseRupees(values.amount)) return "Enter the amount to save.";
+    if (values.description.trim() === "") return "Add a short description to save.";
+    if (values.kind === "expense" && values.category === "") return "Choose a category to save.";
+    if (hasDuplicates && !ackDuplicates) return "Check the possible duplicate above to save.";
+    if (result.cardWarning && !ackCard) return "Check the card warning above to save.";
+    return "";
+  }
 
   return (
     <section aria-label="Review draft" className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4">
@@ -216,28 +227,59 @@ export function ReviewCard({
       ) : (
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-muted">Amount</dt>
-          <dd className="flex flex-col font-semibold">
-            {parseRupees(values.amount) ? formatINR(parseRupees(values.amount)!) : "—"} {needs("amount", "amount")}
+          <dd className="flex flex-col gap-1 font-semibold">
+            {unsure("amount") ? (
+              <input aria-label="Amount (₹)" inputMode="decimal" value={values.amount} onChange={(e) => set({ amount: e.target.value })} className={`${inputClass} h-10`} />
+            ) : parseRupees(values.amount) ? (
+              formatINR(parseRupees(values.amount)!)
+            ) : (
+              "—"
+            )}{" "}
+            {needs("amount", "amount")}
           </dd>
           <dt className="text-muted">Type</dt>
           <dd className="flex flex-col">
             {values.kind === "expense" ? "Expense" : "Income"} {needs("kind", "kind")}
           </dd>
           <dt className="text-muted">Description</dt>
-          <dd className="flex flex-col">
-            {values.description || "—"} {needs("description", "description")}
+          <dd className="flex flex-col gap-1">
+            {unsure("description") ? (
+              <input aria-label="Description" value={values.description} maxLength={280} placeholder="e.g. Dinner with friends" onChange={(e) => set({ description: e.target.value })} className={`${inputClass} h-10`} />
+            ) : (
+              values.description || "—"
+            )}{" "}
+            {needs("description", "description")}
           </dd>
           {values.kind === "expense" && (
             <>
               <dt className="text-muted">Category</dt>
-              <dd className="flex flex-col">
-                {values.category ? categoryLabel(values.category) : "—"} {needs("category", "category")}
+              <dd className="flex flex-col gap-1">
+                {unsure("category") || !proposal.category ? (
+                  <select aria-label="Category" value={values.category} onChange={(e) => set({ category: e.target.value })} className={`${inputClass} h-10`}>
+                    <option value="">Choose a category</option>
+                    {EXPENSE_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  categoryLabel(values.category)
+                )}
+                {!values.category && needs("category", "category")}
               </dd>
             </>
           )}
           <dt className="text-muted">Date</dt>
-          <dd className="flex flex-col">
-            {values.occurredOn ? formatDate(values.occurredOn) : "—"} {needs("date", "occurredOn")}
+          <dd className="flex flex-col gap-1">
+            {unsure("date") ? (
+              <input aria-label="Date" type="date" value={values.occurredOn} onChange={(e) => set({ occurredOn: e.target.value })} className={`${inputClass} h-10`} />
+            ) : values.occurredOn ? (
+              formatDate(values.occurredOn)
+            ) : (
+              "—"
+            )}{" "}
+            {needs("date", "occurredOn")}
           </dd>
           <dt className="text-muted">Paid with</dt>
           <dd>{values.paymentMethod ? PAYMENT_METHOD_LABELS[values.paymentMethod] : "Not specified"}</dd>
@@ -302,6 +344,7 @@ export function ReviewCard({
         <button type="button" disabled={!canConfirm} onClick={confirm} className={`${primaryButton} flex items-center justify-center gap-2`}>
           <CircleCheck className="size-5" aria-hidden /> {pending ? "Saving…" : "Confirm and save"}
         </button>
+        {!canConfirm && !pending && hydrated && <p className="text-center text-xs text-muted">{blockedReason()}</p>}
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setEditing((e) => !e)} className="flex h-11 items-center justify-center gap-2 rounded-full border border-border text-sm font-semibold">
             <Pencil className="size-4" aria-hidden /> {editing ? "Done editing" : "Edit"}

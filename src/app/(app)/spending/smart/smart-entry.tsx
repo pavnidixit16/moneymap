@@ -6,8 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { SuccessNote, inputClass, primaryButton } from "@/components/ui";
 import { useHydrated } from "@/components/use-hydrated";
 import { parseExpenses } from "@/lib/capture/parse-text";
-import { SOURCE_REGISTRY } from "@/lib/capture/sources";
-import { SOURCE_LABELS, type ProposedTransaction } from "@/lib/capture/types";
+import type { ProposedTransaction } from "@/lib/capture/types";
 import { istToday } from "@/lib/engine/dates";
 import { ImportReview } from "./import-review";
 import { ReviewCard, valuesFrom, type DraftValues } from "./review-card";
@@ -281,19 +280,6 @@ export function SmartEntry() {
 
       {tab === "upload" && <ImportReview />}
 
-      <details className="rounded-2xl border border-border bg-surface p-4 text-sm">
-        <summary className="cursor-pointer font-semibold">Other sources</summary>
-        <ul className="flex flex-col gap-2 pt-2">
-          {SOURCE_REGISTRY.map((s) => (
-            <li key={s.id} className="flex justify-between gap-3">
-              <span>{SOURCE_LABELS[s.id]}</span>
-              <span className={`text-right text-xs ${s.available ? "text-success" : "text-muted"}`}>
-                {s.available ? "Available" : "Not available yet"} · {s.note}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </details>
     </div>
   );
 }

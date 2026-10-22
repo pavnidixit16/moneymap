@@ -186,7 +186,7 @@ export function ImportReview() {
                   <div className="flex flex-wrap gap-1">
                     {r.imported && <Badge>Already imported</Badge>}
                     {r.duplicate && <Badge tone="warning">Possible duplicate</Badge>}
-                    {r.proposal.flags.cardBillPayment && <Badge tone="warning">Card bill payment: can&apos;t be saved as spending. Mark it paid under Commitments</Badge>}
+                    {r.proposal.flags.cardBillPayment && !r.imported && <Badge tone="warning">Card bill payment: can&apos;t be saved as spending. Mark it paid under Commitments</Badge>}
                     {r.proposal.kind === "income" && <Badge>Income: off by default</Badge>}
                     {r.proposal.issues.some((i) => i.field === "kind") && <Badge tone="warning">Check debit or credit</Badge>}
                   </div>
@@ -206,6 +206,11 @@ export function ImportReview() {
                     </select>
                   )}
                   {r.proposal.kind === "expense" && r.category && r.imported && <span className="text-xs text-muted">{categoryLabel(r.category)}</span>}
+                  {r.imported && r.proposal.flags.cardBillPayment && (
+                    <p className="text-xs text-warning">
+                      This card bill was saved as spending in an earlier import, so it may be counted twice. Open it under Spending and delete it.
+                    </p>
+                  )}
                 </div>
               </li>
             ))}
