@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
 import { BudgetProgress, CategoryBars } from "@/components/charts";
 import { ButtonLink, Card, ErrorNote, PageHeader, SectionTitle, Skeleton } from "@/components/ui";
 import { getProfile, listTransactions, type TransactionRow } from "@/lib/data";
@@ -9,6 +9,7 @@ import { payCycle } from "@/lib/engine/cycle";
 import { addDays, isISODate, istToday } from "@/lib/engine/dates";
 import { formatDate } from "@/lib/format";
 import { formatINR } from "@/lib/money";
+import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/capture/types";
 import { categoryLabel } from "@/lib/transactions";
 
 async function SpendingContent({ searchParams }: { searchParams: PageProps<"/spending">["searchParams"] }) {
@@ -99,11 +100,11 @@ async function SpendingContent({ searchParams }: { searchParams: PageProps<"/spe
                     <Link href={`/spending/${t.id}`} className="flex items-center gap-3 py-3">
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="font-semibold">{categoryLabel(t.category)}</span>
-                        {(t.note || t.is_sample) && (
+                        {(t.note || t.is_sample || t.payment_method) && (
                           <span className="truncate text-xs text-muted">
-                            {t.is_sample ? "Sample" : ""}
-                            {t.is_sample && t.note ? " · " : ""}
-                            {t.note}
+                            {[t.is_sample ? "Sample" : null, t.payment_method ? PAYMENT_METHOD_LABELS[t.payment_method as PaymentMethod] : null, t.note]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </span>
                         )}
                       </span>
@@ -130,9 +131,14 @@ export default function SpendingPage({ searchParams }: PageProps<"/spending">) {
         title="Spending"
         subtitle="Everyday expenses and extra income"
         action={
-          <ButtonLink href="/spending/new">
-            <Plus className="size-4" aria-hidden /> Add
-          </ButtonLink>
+          <div className="flex gap-2">
+            <ButtonLink href="/spending/smart" variant="soft">
+              <Sparkles className="size-4" aria-hidden /> Smart add
+            </ButtonLink>
+            <ButtonLink href="/spending/new">
+              <Plus className="size-4" aria-hidden /> Add
+            </ButtonLink>
+          </div>
         }
       />
       <Suspense fallback={<Skeleton className="h-64" />}>

@@ -5,6 +5,8 @@ import { Suspense } from "react";
 import { IconBubble } from "@/components/icons";
 import { PageHeader, Skeleton } from "@/components/ui";
 import { COMMITMENT_TYPES, typeByKey } from "@/lib/catalog";
+import { FREQUENCIES, type Frequency } from "@/lib/engine/types";
+import { paiseToInput, parseRupees } from "@/lib/money";
 import { CommitmentForm } from "../commitment-form";
 
 // Older links used ?preset=; map them onto the current type keys.
@@ -36,6 +38,12 @@ async function NewContent({ searchParams }: { searchParams: PageProps<"/commitme
   const type = typeByKey(raw ? (LEGACY_PRESETS[raw] ?? raw) : undefined);
   if (!type) return <TypePicker />;
 
+  // Prefill offered by Smart add ("Add Netflix as a subscription"); still only saved here.
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const prefillName = str(params.name).slice(0, 80);
+  const prefillAmount = parseRupees(str(params.amount));
+  const prefillFrequency = FREQUENCIES.includes(str(params.frequency) as Frequency) ? (str(params.frequency) as Frequency) : null;
+
   return (
     <>
       <div className="flex items-center gap-3">
@@ -53,18 +61,19 @@ async function NewContent({ searchParams }: { searchParams: PageProps<"/commitme
         key={crypto.randomUUID()}
         initial={{
           variant: type.variant,
-          name: type.name,
+          name: prefillName || type.name,
           kind: type.kind,
           subtype: type.subtype,
           tracking_mode: type.mode,
-          amount: "",
+          amount: prefillAmount ? paiseToInput(prefillAmount) : "",
           amount_is_estimate: type.estimate ?? false,
-          frequency: type.frequency,
+          frequency: prefillFrequency ?? type.frequency,
           next_due_date: "",
           end_date: "",
           maturity_date: "",
           provider: "",
           coverage: "",
+          interest_rate: "",
           notes: "",
         }}
       />

@@ -153,6 +153,7 @@ export const commitmentSchema = z
       .max(80, "Keep this under 80 characters")
       .transform((v) => (v === "" ? null : v)),
     coverage: z.string().trim(),
+    interest_rate: z.string().trim(),
     notes: z
       .string()
       .trim()
@@ -194,6 +195,16 @@ export const commitmentSchema = z
       }
     }
 
+    let interest_rate_bps: number | null = null;
+    if (v.interest_rate !== "") {
+      const rate = Number(v.interest_rate.replace(/%/g, ""));
+      if (!Number.isFinite(rate) || rate < 0 || rate > 50 || !/^\d+(\.\d{1,2})?%?$/.test(v.interest_rate)) {
+        ctx.addIssue({ code: "custom", path: ["interest_rate"], message: "Enter a rate like 7.1 (per cent a year)" });
+      } else {
+        interest_rate_bps = Math.round(rate * 100);
+      }
+    }
+
     const isInfo = v.tracking_mode === "info";
     if (!isInfo && !v.next_due_date) {
       ctx.addIssue({ code: "custom", path: ["next_due_date"], message: "Enter the next due date" });
@@ -217,6 +228,8 @@ export const commitmentSchema = z
       provider: v.provider,
       // Cover is display-only and only meaningful for insurance.
       coverage_paise: v.kind === "insurance" ? coverage_paise : null,
+      // Interest is for reference only; MoneyMap never calculates returns.
+      interest_rate_bps: v.kind === "investment" ? interest_rate_bps : null,
       notes: v.notes,
     };
   });
@@ -237,6 +250,7 @@ export function commitmentFormValues(formData: FormData) {
     maturity_date: String(formData.get("maturity_date") ?? ""),
     provider: String(formData.get("provider") ?? ""),
     coverage: String(formData.get("coverage") ?? ""),
+    interest_rate: String(formData.get("interest_rate") ?? ""),
     notes: String(formData.get("notes") ?? ""),
   };
 }

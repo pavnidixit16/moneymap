@@ -25,6 +25,7 @@ describe("sample data", () => {
           maturity_date: c.maturity_date ?? "",
           provider: c.provider ?? "",
           coverage: c.coverage_paise ? String(c.coverage_paise / 100) : "",
+          interest_rate: "",
           notes: "",
         });
         expect(parsed.success, c.name).toBe(true);

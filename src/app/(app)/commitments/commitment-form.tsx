@@ -25,6 +25,7 @@ export interface CommitmentFormValues {
   maturity_date: string;
   provider: string;
   coverage: string;
+  interest_rate: string;
   notes: string;
 }
 
@@ -323,6 +324,12 @@ export function CommitmentForm({ initial }: { initial: CommitmentFormValues }) {
             </Field>
           )}
         </>
+      )}
+
+      {variant === "fd" && (
+        <Field label="Interest rate (% a year, optional)" htmlFor="interest_rate" error={e.interest_rate} hint="For your reference. MoneyMap doesn't calculate interest or maturity value.">
+          <input id="interest_rate" name="interest_rate" inputMode="decimal" defaultValue={initial.interest_rate} className={inputClass} placeholder="7.1" />
+        </Field>
       )}
 
       {(variant === "rd" || variant === "fd" || variant === "insurance" || variant === "savings" || variant === "other") && (

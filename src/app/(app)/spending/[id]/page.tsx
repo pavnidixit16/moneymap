@@ -30,6 +30,7 @@ async function EditContent({ params, searchParams }: PageProps<"/spending/[id]">
           category: t.kind === "expense" ? t.category : "food",
           occurred_on: t.occurred_on,
           note: t.note ?? "",
+          payment_method: t.payment_method ?? "",
         }}
       />
       <Card>

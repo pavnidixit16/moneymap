@@ -4,6 +4,7 @@ import { useHydrated } from "@/components/use-hydrated";
 import { startTransition, useActionState, useState } from "react";
 import { Field, inputClass, primaryButton } from "@/components/ui";
 import { istToday } from "@/lib/engine/dates";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from "@/lib/capture/types";
 import { EXPENSE_CATEGORIES } from "@/lib/transactions";
 import { saveTransaction, type TransactionFormState } from "./actions";
 
@@ -14,12 +15,14 @@ export interface TransactionFormValues {
   category: string;
   occurred_on: string;
   note: string;
+  payment_method: string;
 }
 
 export function TransactionForm({ initial }: { initial: TransactionFormValues }) {
   const [state, action, pending] = useActionState<TransactionFormState, FormData>(saveTransaction, {});
   const hydrated = useHydrated();
   const [kind, setKind] = useState(initial.kind);
+  const [method, setMethod] = useState(initial.payment_method);
   const e = state.errors ?? {};
 
   return (
@@ -79,6 +82,26 @@ export function TransactionForm({ initial }: { initial: TransactionFormValues })
 
       <Field label="Date" htmlFor="occurred_on" error={e.occurred_on}>
         <input id="occurred_on" name="occurred_on" type="date" defaultValue={initial.occurred_on || istToday()} className={inputClass} />
+      </Field>
+
+      <Field
+        label="Paid with (optional)"
+        htmlFor="payment_method"
+        error={e.payment_method}
+        hint={
+          method === "credit_card" && kind === "expense"
+            ? "Card purchases count as spending now. Keep the card's bill set to “I log card purchases as expenses” so it isn't counted twice."
+            : undefined
+        }
+      >
+        <select id="payment_method" name="payment_method" value={method} onChange={(ev) => setMethod(ev.target.value)} className={inputClass}>
+          <option value="">Not specified</option>
+          {PAYMENT_METHODS.map((m) => (
+            <option key={m} value={m}>
+              {PAYMENT_METHOD_LABELS[m]}
+            </option>
+          ))}
+        </select>
       </Field>
 
       <Field label="Note (optional)" htmlFor="note" error={e.note}>

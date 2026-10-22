@@ -7,6 +7,7 @@ import {
   Plus,
   Receipt,
   Repeat,
+  Sparkles,
   TrendingUp,
   TriangleAlert,
   Wallet,
@@ -340,8 +341,8 @@ export default function OverviewPage() {
     <>
       <header className="flex items-center justify-between">
         <p className="text-xl font-bold tracking-tight text-accent">MoneyMap</p>
-        <ButtonLink href="/spending/new" variant="soft">
-          <Plus className="size-4" aria-hidden /> Expense
+        <ButtonLink href="/spending/smart" variant="soft">
+          <Sparkles className="size-4" aria-hidden /> Smart add
         </ButtonLink>
       </header>
       <Suspense

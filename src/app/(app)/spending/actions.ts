@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { fieldErrorsFrom, type FieldErrors } from "@/lib/commitments";
 import { isUuid, requireUser } from "@/lib/data";
 import { istToday } from "@/lib/engine/dates";
+import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/capture/types";
 import { transactionSchema } from "@/lib/transactions";
 
 export interface TransactionFormState {
@@ -21,12 +22,15 @@ export async function saveTransaction(_prev: TransactionFormState, formData: For
     note: String(formData.get("note") ?? ""),
   });
   if (!parsed.success) return { errors: fieldErrorsFrom(parsed.error) };
+  const method = String(formData.get("payment_method") ?? "");
+  if (method && !PAYMENT_METHODS.includes(method as PaymentMethod)) return { errors: { payment_method: "Choose how you paid" } };
+  const row = { ...parsed.data, payment_method: (method || null) as PaymentMethod | null };
 
   const id = String(formData.get("id") ?? "");
   if (id && !isUuid(id)) return { errors: { form: "This entry no longer exists." } };
   const { data, error } = id
-    ? await supabase.from("transactions").update(parsed.data).eq("id", id).select("id")
-    : await supabase.from("transactions").insert(parsed.data).select("id");
+    ? await supabase.from("transactions").update(row).eq("id", id).select("id")
+    : await supabase.from("transactions").insert(row).select("id");
   if (error) return { errors: { form: "Couldn't save. Please check the details and try again." } };
   if (!data?.length) return { errors: { form: "This entry no longer exists." } };
 

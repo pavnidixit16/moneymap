@@ -11,7 +11,7 @@ async function NewForm({ searchParams }: { searchParams: PageProps<"/spending/ne
   return (
     <TransactionForm
       key={crypto.randomUUID()}
-      initial={{ kind: kind === "income" ? "income" : "expense", amount: "", category: "food", occurred_on: "", note: "" }}
+      initial={{ kind: kind === "income" ? "income" : "expense", amount: "", category: "food", occurred_on: "", note: "", payment_method: "" }}
     />
   );
 }

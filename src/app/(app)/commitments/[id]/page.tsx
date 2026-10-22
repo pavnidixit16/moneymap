@@ -102,6 +102,7 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
           maturity_date: commitment.maturity_date ?? "",
           provider: commitment.provider ?? "",
           coverage: commitment.coverage_paise ? paiseToInput(commitment.coverage_paise) : "",
+          interest_rate: commitment.interest_rate_bps !== null ? String(commitment.interest_rate_bps / 100) : "",
           notes: commitment.notes ?? "",
         }}
       />

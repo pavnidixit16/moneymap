@@ -231,6 +231,49 @@ do $$ begin
   raise notice 'PASS: bills category, provider and coverage are stored';
 end $$;
 
+-- ---------------------------------------------------------------- migration 5 smart entry (as B)
+do $$ begin
+  insert into public.transactions (kind, amount_paise, category, occurred_on, source, client_request_id, payment_method)
+  values ('expense', 45000, 'food', '2026-10-21', 'text', 'cccccccc-0000-4000-8000-000000000001', 'upi');
+  begin
+    insert into public.transactions (kind, amount_paise, category, occurred_on, source, client_request_id)
+    values ('expense', 45000, 'food', '2026-10-21', 'text', 'cccccccc-0000-4000-8000-000000000001');
+    raise exception 'FAIL: the same confirmation was saved twice';
+  exception when unique_violation then null; end;
+
+  -- A genuinely different expense with the same amount and day is allowed.
+  insert into public.transactions (kind, amount_paise, category, occurred_on, source, client_request_id)
+  values ('expense', 45000, 'food', '2026-10-21', 'text', 'cccccccc-0000-4000-8000-000000000002');
+
+  insert into public.transactions (kind, amount_paise, category, occurred_on, source, source_ref)
+  values ('expense', 99900, 'shopping', '2026-10-20', 'document', 'row:2026-10-20|99900|AMAZON');
+  begin
+    insert into public.transactions (kind, amount_paise, category, occurred_on, source, source_ref)
+    values ('expense', 99900, 'shopping', '2026-10-20', 'document', 'row:2026-10-20|99900|AMAZON');
+    raise exception 'FAIL: the same statement row was imported twice';
+  exception when unique_violation then null; end;
+
+  begin
+    insert into public.transactions (kind, amount_paise, category, occurred_on, payment_method)
+    values ('expense', 100, 'food', '2026-10-21', 'bitcoin');
+    raise exception 'FAIL: an unknown payment method was accepted';
+  exception when check_violation then null; end;
+
+  raise notice 'PASS: smart-entry idempotency and import de-duplication hold';
+end $$;
+
+-- The same request id belongs to each user separately (no cross-user collision or leak).
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$ begin
+  insert into public.transactions (kind, amount_paise, category, occurred_on, source, client_request_id)
+  values ('expense', 45000, 'food', '2026-10-21', 'text', 'cccccccc-0000-4000-8000-000000000001');
+  if (select count(*) from public.transactions where client_request_id = 'cccccccc-0000-4000-8000-000000000001') <> 1 then
+    raise exception 'FAIL: user A can see user B''s smart-entry rows';
+  end if;
+  raise notice 'PASS: request ids are per user and isolated';
+end $$;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
+
 -- ---------------------------------------------------------------- anonymous visitor
 reset role;
 set local role anon;

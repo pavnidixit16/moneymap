@@ -391,3 +391,21 @@ None of these change the calculation rules R1–R10 or the database access rules
   "Sample" badge) and clear it without touching the user's own records.
 - **Forms:** submit buttons stay disabled until the page is interactive, and forms post,
   so an early tap can never silently discard input or put values in the URL.
+
+## 13. Smart expense entry (v3.2, 23 Oct 2026)
+
+- **Smart add** (Home header, Spending): type a sentence, paste a bank/UPI SMS or email, speak
+  (browser speech recognition where supported, with a typing fallback), or upload a **CSV**
+  statement. PDFs, photos and Excel files are refused with an explanation; OCR would need a new
+  dependency and is out of scope for this release.
+- **Confirmation first:** capture → extract → validate → duplicate check → editable draft →
+  user confirms → save → success. Uncertain fields are marked "Needs review"; nothing is saved
+  on upload, speech or typing alone. Unsaved drafts are kept in the browser session for retry.
+- **Migration 5 (additive):** `transactions.payment_method`, `source`, `source_ref`,
+  `client_request_id` with unique constraints for exactly-once saving and import de-duplication;
+  `commitments.interest_rate_bps` (FD interest, display only).
+- **Rules:** statement balances and opening/closing rows are never transactions; credit-card bill
+  payments are not saved as spending; card purchases warn when the card bill is counted;
+  subscriptions are suggestions only. Calculation rules R1–R10 are unchanged.
+- Future sources (Gmail, Android SMS, bank feeds) are documented in `docs/INTEGRATIONS.md` and
+  disabled in this release.

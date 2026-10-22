@@ -45,7 +45,7 @@ export function sampleRows(today: ISODate, paydayDay: number) {
     { kind: "expense", amount_paise: r(3199), category: "shopping", occurred_on: spent(2), note: "Shoes" },
     { kind: "expense", amount_paise: r(650), category: "entertainment", occurred_on: spent(1), note: "Movie" },
     { kind: "income", amount_paise: r(5000), category: "income", occurred_on: spent(5), note: "Freelance payment" },
-  ].map((t) => ({ ...t, is_sample: true }));
+  ].map((t) => ({ ...t, source: "sample", is_sample: true }));
 
   return { commitments, transactions };
 }

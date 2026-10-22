@@ -140,7 +140,7 @@ test("spending: validate, add, edit, extra income, delete and switch cycles", as
   await page.goto("/spending");
   await expect(text(page, "No spending logged this cycle")).toBeVisible();
 
-  await page.getByRole("link", { name: "Add" }).click();
+  await page.getByRole("link", { name: "Add", exact: true }).click();
   await label(page, "Category").selectOption("groceries");
   await page.getByRole("button", { name: "Add expense" }).click();
   await expect(text(page, "Enter an amount above ₹0, like 450 or 1299.50")).toBeVisible();
@@ -159,7 +159,7 @@ test("spending: validate, add, edit, extra income, delete and switch cycles", as
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("link", { name: /Groceries.*₹500/ })).toBeVisible();
 
-  await page.getByRole("link", { name: "Add" }).click();
+  await page.getByRole("link", { name: "Add", exact: true }).click();
   await page.getByText("Extra income", { exact: true }).filter({ visible: true }).click();
   await label(page, "Amount (₹)").fill("2000");
   await page.getByRole("button", { name: "Add income" }).click();

@@ -14,6 +14,7 @@ const valid = {
   maturity_date: "",
   provider: "",
   coverage: "",
+  interest_rate: "",
   notes: "",
 };
 
@@ -97,6 +98,17 @@ describe("provider and cover", () => {
     expect(r.success && r.data.coverage_paise).toBeNull();
     const bad = commitmentSchema.safeParse({ ...valid, kind: "insurance", subtype: "health", coverage: "lots" });
     expect(bad.success).toBe(false);
+  });
+});
+
+describe("FD interest rate", () => {
+  const fd = { ...valid, kind: "investment", subtype: "fd", tracking_mode: "info", next_due_date: "", maturity_date: "2027-10-22", amount: "100000" };
+  it("stores the optional rate in basis points", () => {
+    const r = commitmentSchema.safeParse({ ...fd, interest_rate: "7.1" });
+    expect(r.success && r.data.interest_rate_bps).toBe(710);
+  });
+  it.each(["abc", "-1", "75", "7.123"])("rejects %s", (rate) => {
+    expect(commitmentSchema.safeParse({ ...fd, interest_rate: rate }).success).toBe(false);
   });
 });
 
