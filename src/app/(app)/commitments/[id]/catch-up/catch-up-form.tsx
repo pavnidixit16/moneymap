@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/components/use-hydrated";
 import { startTransition, useActionState, useState } from "react";
 import { inputClass } from "@/components/ui";
 import { istToday } from "@/lib/engine/dates";
@@ -19,11 +20,13 @@ export function CatchUpForm({
   rows: { date: string; allowUnrecorded: boolean }[];
 }) {
   const [state, action, pending] = useActionState<ActionResult, FormData>(catchUp, {});
+  const hydrated = useHydrated();
   const [choices, setChoices] = useState<Record<string, Choice>>(() => Object.fromEntries(rows.map((r) => [r.date, "leave"])));
   const chosen = Object.values(choices).filter((c) => c !== "leave").length;
 
   return (
     <form
+      method="post"
       onSubmit={(ev) => {
         ev.preventDefault();
         const data = new FormData(ev.currentTarget);
@@ -81,7 +84,7 @@ export function CatchUpForm({
       )}
       <button
         type="submit"
-        disabled={pending || chosen === 0}
+        disabled={!hydrated || pending || chosen === 0}
         className="h-12 rounded-full bg-accent font-semibold text-accent-foreground disabled:opacity-60"
       >
         {pending ? "Saving…" : chosen === 0 ? "Choose at least one date" : `Save ${chosen} date${chosen === 1 ? "" : "s"}`}

@@ -2,6 +2,7 @@
 
 import { startTransition, useActionState, useState, type FormEvent } from "react";
 import { inputClass } from "@/components/ui";
+import { useHydrated } from "@/components/use-hydrated";
 import { istToday } from "@/lib/engine/dates";
 import { paiseToInput } from "@/lib/money";
 import { editPayment, markPaid, skipOccurrence, undoPayment, type ActionResult } from "./payment-actions";
@@ -31,11 +32,13 @@ export function SettleControls({
   dueDate,
   expectedPaise,
   label,
+  afterPayday = false,
 }: {
   commitmentId: string;
   dueDate: string;
   expectedPaise: number;
   label: string;
+  afterPayday?: boolean;
 }) {
   const [open, setOpen] = useState<"none" | "paid" | "skip">("none");
   const [paidState, paidAction, paidPending] = useActionState<ActionResult, FormData>(markPaid, {});
@@ -56,6 +59,12 @@ export function SettleControls({
             <input name="paid_on" type="date" defaultValue={istToday()} max={istToday()} aria-label={`Paid on for ${label}`} className={inputClass} />
           </label>
         </div>
+        {afterPayday && (
+          <p className="rounded-xl bg-surface-2 p-2 text-xs">
+            This is due after your next payday. Paying it now counts in this pay cycle, so your estimated amount
+            remaining will go down by this amount.
+          </p>
+        )}
         <Message state={paidState} />
         <div className="flex gap-2">
           <button type="submit" disabled={paidPending} className={`${smallButton} bg-accent text-accent-foreground`}>
@@ -118,6 +127,7 @@ export function PaymentControls({
   const [editing, setEditing] = useState(false);
   const [editState, editAction, editPending] = useActionState<ActionResult, FormData>(editPayment, {});
   const [undoState, undoAction, undoPending] = useActionState<ActionResult, FormData>(undoPayment, {});
+  const hydrated = useHydrated();
 
   if (editing) {
     return (
@@ -155,9 +165,9 @@ export function PaymentControls({
           </button>
         )}
         {canUndo && (
-          <form onSubmit={submitWith(undoAction)}>
+          <form method="post" onSubmit={submitWith(undoAction)}>
             <input type="hidden" name="payment_id" value={paymentId} />
-            <button type="submit" disabled={undoPending} className="font-semibold text-accent underline disabled:opacity-60">
+            <button type="submit" disabled={!hydrated || undoPending} className="font-semibold text-accent underline disabled:opacity-60">
               {undoPending ? "Undoing…" : "Undo"}
             </button>
           </form>

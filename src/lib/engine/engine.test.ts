@@ -118,6 +118,7 @@ describe("worked example 1 (payday 1, today 20 Oct 2026)", () => {
     expect(o.investmentsDuePaise).toBe(rupees(2000));
     expect(o.remainingPaise).toBe(rupees(31051));
     expect(o.plannedInvestmentsPaise).toBe(rupees(7000));
+    expect(o.paidAheadPaise).toBe(0);
   });
 
   it("flags the overdue RD and the estimated electricity bill", () => {
@@ -186,6 +187,10 @@ describe("worked example 2 (payday 25, catch-up, early payment)", () => {
     expect(o.obligationsDuePaise).toBe(rupees(1000));
     expect(o.investmentsDuePaise).toBe(0);
     expect(o.remainingPaise).toBe(rupees(11000));
+  });
+
+  it("reports the rent paid early for 1 Nov as paid ahead", () => {
+    expect(o.paidAheadPaise).toBe(rupees(18000));
   });
 
   it("keeps only the unresolved 5 Oct broadband date overdue", () => {

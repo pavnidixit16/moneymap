@@ -366,3 +366,28 @@ short.
   subscription to review. Measures: success, time to first correct tap, wrong taps,
   1–7 ease rating, preference and reason, trust/privacy remarks recorded as
   observations only. A signal needs a consistent difference in ≥5 of 8 participants.
+
+---
+
+## 12. Changes agreed after v3 (v3.1, 22 Oct 2026)
+
+None of these change the calculation rules R1–R10 or the database access rules.
+
+- **Navigation:** five tabs — Home (dashboard), Commitments (Upcoming / All), Spending,
+  Subscriptions (the Review screen from §3, promoted to its own tab), Settings.
+- **Visual design:** purple MoneyMap identity inspired by familiar payment-app navigation;
+  no third-party names, logos or affiliation.
+- **Type-specific commitment forms:** credit card (issuer list with example variants and
+  "Other / enter manually"; payment behaviour maps to reminder-only vs outflow), insurance
+  (insurer, premium, separate cover), SIP, RD, FD (already deposited = info-only; planned
+  deposit = one-time outflow), PPF/EPF.
+- **Migration 4:** `commitments.provider`, `commitments.coverage_paise` (display only, never
+  counted) and a `bills` expense category labelled "One-off bills" for bills that are not
+  set up as commitments; the form tells users to keep recurring bills under Commitments.
+- **Early payments (rule D4, unchanged):** a payment counts in the cycle it is made. The
+  Paid form now warns when a date is after the next payday, and the breakdown states how
+  much of "already paid" was paid early.
+- **Sample data:** Settings can load a sample set (all rows `is_sample`, shown with a
+  "Sample" badge) and clear it without touching the user's own records.
+- **Forms:** submit buttons stay disabled until the page is interactive, and forms post,
+  so an early tap can never silently discard input or put values in the URL.

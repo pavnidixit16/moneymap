@@ -5,7 +5,8 @@ import { commitmentIconName, IconBubble } from "@/components/icons";
 import { Badge, ButtonLink, Card, ErrorNote, PageHeader, SectionTitle, Skeleton, SuccessNote } from "@/components/ui";
 import { COMMITMENT_TYPES } from "@/lib/catalog";
 import { SECTION_ORDER, subtypeLabel } from "@/lib/commitments";
-import { listCommitments, listPayments, type CommitmentRow } from "@/lib/data";
+import { getProfile, listCommitments, listPayments, type CommitmentRow } from "@/lib/data";
+import { payCycle } from "@/lib/engine/cycle";
 import { addDays, istToday } from "@/lib/engine/dates";
 import { comingUp, dueItemsUntil, type DueItem } from "@/lib/engine/overview";
 import { formatDate, frequencyLabel } from "@/lib/format";
@@ -133,7 +134,7 @@ async function AllTab() {
 
 const STATE_TITLES = { overdue: "Overdue", due_today: "Due today", upcoming: "Next 60 days" } as const;
 
-function DueRow({ item, catchUpCount, canSettle }: { item: DueItem; catchUpCount: number; canSettle: boolean }) {
+function DueRow({ item, catchUpCount, canSettle, cycleEnd }: { item: DueItem; catchUpCount: number; canSettle: boolean; cycleEnd: string }) {
   return (
     <li className="py-3">
       <div className="flex items-start gap-3">
@@ -166,6 +167,7 @@ function DueRow({ item, catchUpCount, canSettle }: { item: DueItem; catchUpCount
           dueDate={item.date}
           expectedPaise={item.amountPaise}
           label={`${item.name} due ${formatDate(item.date)}`}
+          afterPayday={item.date > cycleEnd && item.bucket !== "reminder"}
         />
       ) : (
         <p className="pt-1 text-xs text-muted">Settle the earlier date first.</p>
@@ -175,15 +177,16 @@ function DueRow({ item, catchUpCount, canSettle }: { item: DueItem; catchUpCount
 }
 
 async function UpcomingTab() {
-  let commitments: CommitmentRow[], payments;
+  let commitments: CommitmentRow[], payments, profile;
   try {
-    [commitments, payments] = await Promise.all([listCommitments(), listPayments()]);
+    [commitments, payments, profile] = await Promise.all([listCommitments(), listPayments(), getProfile()]);
   } catch {
     return <ErrorNote>Couldn&apos;t load your upcoming payments. Please refresh the page.</ErrorNote>;
   }
   if (commitments.length === 0) return <AllTab />;
 
   const today = istToday();
+  const cycleEnd = payCycle(profile.payday_day, today).end;
   const items = dueItemsUntil(commitments, payments, today, addDays(today, 60));
   const maturities = comingUp(commitments, payments, today).filter((e) => e.type === "maturity");
   // Paid / Skip only on each item's earliest open date, so dates are settled in order.
@@ -222,6 +225,7 @@ async function UpcomingTab() {
                   item={i}
                   catchUpCount={state === "overdue" ? (overdueByCommitment.get(i.commitmentId) ?? 0) : 0}
                   canSettle={earliestByCommitment.get(i.commitmentId) === i.date}
+                  cycleEnd={cycleEnd}
                 />
               ))}
             </ul>

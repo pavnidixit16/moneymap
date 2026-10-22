@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/components/use-hydrated";
 import { startTransition, useActionState, useState, type ReactNode } from "react";
 import { Field, inputClass, primaryButton } from "@/components/ui";
 import { BANKS, CARD_ISSUERS, FUND_PLATFORMS, INSURERS, type FormVariant } from "@/lib/catalog";
@@ -45,6 +46,7 @@ const OTHER_ISSUER = "__other__";
 
 export function CommitmentForm({ initial }: { initial: CommitmentFormValues }) {
   const [state, action, pending] = useActionState<CommitmentFormState, FormData>(saveCommitment, {});
+  const hydrated = useHydrated();
   const variant = initial.variant;
   const copy = COPY[variant];
   const [subtype, setSubtype] = useState(initial.subtype);
@@ -118,6 +120,7 @@ export function CommitmentForm({ initial }: { initial: CommitmentFormValues }) {
 
   return (
     <form
+      method="post"
       // Submit manually: a plain form action resets every field afterwards, which would
       // wipe what the user typed when validation fails.
       onSubmit={(ev) => {
@@ -170,7 +173,7 @@ export function CommitmentForm({ initial }: { initial: CommitmentFormValues }) {
               />
             </Field>
           )}
-          {issuer && issuer !== OTHER_ISSUER && (
+          {issuer && issuer !== OTHER_ISSUER && !initial.id && (
             <Field label="Card (optional)" htmlFor="card_variant" hint="Pick a suggestion or type your card's name. Suggestions are examples, not a complete list.">
               <input
                 id="card_variant"
@@ -352,7 +355,7 @@ export function CommitmentForm({ initial }: { initial: CommitmentFormValues }) {
         </p>
       )}
 
-      <button type="submit" disabled={pending} className={primaryButton}>
+      <button type="submit" disabled={!hydrated || pending} className={primaryButton}>
         {pending ? "Saving…" : initial.id ? "Save changes" : "Add commitment"}
       </button>
     </form>

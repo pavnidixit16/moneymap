@@ -88,33 +88,36 @@ async function SpendingContent({ searchParams }: { searchParams: PageProps<"/spe
           </p>
         </Card>
       ) : (
-        [...byDate].map(([date, items]) => (
-          <Card key={date}>
-            <SectionTitle>{formatDate(date)}</SectionTitle>
-            <ul className="divide-y divide-border">
-              {items.map((t) => (
-                <li key={t.id}>
-                  <Link href={`/spending/${t.id}`} className="flex justify-between gap-3 py-3">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="font-semibold">{categoryLabel(t.category)}</span>
-                      {(t.note || t.is_sample) && (
-                        <span className="truncate text-xs text-muted">
-                          {t.is_sample ? "Sample" : ""}
-                          {t.is_sample && t.note ? " · " : ""}
-                          {t.note}
-                        </span>
-                      )}
-                    </span>
-                    <span className={`shrink-0 font-semibold tabular-nums ${t.kind === "income" ? "text-success" : ""}`}>
-                      {t.kind === "income" ? "+" : ""}
-                      {formatINR(t.amount_paise)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ))
+        <Card>
+          <SectionTitle>Transactions</SectionTitle>
+          {[...byDate].map(([date, items]) => (
+            <section key={date} className="pt-2">
+              <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">{formatDate(date)}</h3>
+              <ul className="divide-y divide-border">
+                {items.map((t) => (
+                  <li key={t.id}>
+                    <Link href={`/spending/${t.id}`} className="flex items-center gap-3 py-3">
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="font-semibold">{categoryLabel(t.category)}</span>
+                        {(t.note || t.is_sample) && (
+                          <span className="truncate text-xs text-muted">
+                            {t.is_sample ? "Sample" : ""}
+                            {t.is_sample && t.note ? " · " : ""}
+                            {t.note}
+                          </span>
+                        )}
+                      </span>
+                      <span className={`shrink-0 font-semibold tabular-nums ${t.kind === "income" ? "text-success" : ""}`}>
+                        {t.kind === "income" ? "+" : "−"}
+                        {formatINR(t.amount_paise)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </Card>
       )}
     </>
   );

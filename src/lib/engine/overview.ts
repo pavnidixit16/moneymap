@@ -39,6 +39,7 @@ export interface Overview {
   budgetLeftPaise: Paise; // R3
   obligationsPaidPaise: Paise; // R4
   investmentsPaidPaise: Paise; // R5
+  paidAheadPaise: Paise; // part of R4 + R5 paid this cycle for dates after it (explained, not a new rule)
   obligationsDuePaise: Paise; // R6
   investmentsDuePaise: Paise; // R7
   remainingPaise: Paise; // R8
@@ -133,12 +134,14 @@ export function computeOverview({ profile, transactions, commitments, payments, 
   const commitmentById = new Map(commitments.map((c) => [c.id, c]));
   let obligationsPaidPaise = 0;
   let investmentsPaidPaise = 0;
+  let paidAheadPaise = 0;
   for (const p of payments) {
     if (p.outcome !== "paid" || !inCycle(p.paid_on)) continue;
     const c = commitmentById.get(p.commitment_id);
     const bucket = c ? bucketOf(c) : null;
     if (bucket === "obligation") obligationsPaidPaise += p.amount_paise;
     if (bucket === "investment") investmentsPaidPaise += p.amount_paise;
+    if ((bucket === "obligation" || bucket === "investment") && p.due_date > cycle.end) paidAheadPaise += p.amount_paise;
   }
 
   // R6, R7: everything still unresolved up to the end of the cycle, including overdue
@@ -176,6 +179,7 @@ export function computeOverview({ profile, transactions, commitments, payments, 
     budgetLeftPaise,
     obligationsPaidPaise,
     investmentsPaidPaise,
+    paidAheadPaise,
     obligationsDuePaise,
     investmentsDuePaise,
     remainingPaise,

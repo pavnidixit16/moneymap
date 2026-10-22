@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/components/use-hydrated";
 import { startTransition, useActionState } from "react";
 import { Field, inputClass, primaryButton } from "@/components/ui";
 import { saveSettings, type SettingsState } from "./actions";
@@ -14,10 +15,12 @@ export interface SettingsValues {
 
 export function SettingsForm({ initial }: { initial: SettingsValues }) {
   const [state, action, pending] = useActionState<SettingsState, FormData>(saveSettings, {});
+  const hydrated = useHydrated();
   const e = state.errors ?? {};
 
   return (
     <form
+      method="post"
       // Submit manually: a plain form action resets every field afterwards, which would
       // wipe what the user typed when validation fails.
       onSubmit={(ev) => {
@@ -70,7 +73,7 @@ export function SettingsForm({ initial }: { initial: SettingsValues }) {
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={!hydrated || pending}
         className={primaryButton}
       >
         {pending ? "Saving…" : initial.firstTime ? "Save and continue" : "Save settings"}

@@ -43,6 +43,15 @@ const SHORTCUTS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/commitments?tab=all", label: "All bills", icon: Wallet },
 ];
 
+// "PAVNI DIXIT" -> "Pavni"; names already in mixed case are left as typed.
+function friendlyFirstName(name: string | null | undefined): string | undefined {
+  const first = name?.trim().split(/\s+/)[0];
+  if (!first) return undefined;
+  return first === first.toUpperCase() || first === first.toLowerCase()
+    ? first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
+    : first;
+}
+
 function daysBetween(from: string, to: string) {
   const a = parseISODate(from);
   const b = parseISODate(to);
@@ -95,6 +104,8 @@ function Breakdown({ o }: { o: Overview }) {
         Not counted: credit-card bills marked reminder-only (their purchases are already in your spending), info-only
         records such as FDs you&apos;ve already made or EPF, and cancelled items.
         {o.includesEstimates && " Some amounts still due are estimates."}
+        {o.paidAheadPaise > 0 &&
+          ` Already paid includes ${formatINR(o.paidAheadPaise)} paid early for dates after your next payday; a payment counts in the pay cycle you make it.`}
       </p>
     </details>
   );
@@ -127,7 +138,7 @@ async function Dashboard() {
   const due = o.dueItems.slice(0, 5);
   const events = comingUp(commitments, payments, today);
   const unreviewed = commitments.filter((c) => c.kind === "subscription" && c.status === "active" && c.review_status === "unreviewed").length;
-  const firstName = profile.display_name?.split(" ")[0];
+  const firstName = friendlyFirstName(profile.display_name);
 
   return (
     <>
@@ -310,7 +321,7 @@ async function Dashboard() {
 function Welcome({ name }: { name: string | null }) {
   return (
     <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-hero-from to-hero-to p-5 text-white shadow-lg">
-      <p className="text-2xl font-bold">Welcome{name ? `, ${name.split(" ")[0]}` : ""}</p>
+      <p className="text-2xl font-bold">Welcome{name ? `, ${friendlyFirstName(name)}` : ""}</p>
       <p className="text-sm text-white/90">
         See what&apos;s already committed, what&apos;s due next and roughly how much remains until payday. Start with your
         take-home pay, payday and spending budget. It takes under a minute.

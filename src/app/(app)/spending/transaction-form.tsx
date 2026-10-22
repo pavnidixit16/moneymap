@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/components/use-hydrated";
 import { startTransition, useActionState, useState } from "react";
 import { Field, inputClass, primaryButton } from "@/components/ui";
 import { istToday } from "@/lib/engine/dates";
@@ -17,11 +18,13 @@ export interface TransactionFormValues {
 
 export function TransactionForm({ initial }: { initial: TransactionFormValues }) {
   const [state, action, pending] = useActionState<TransactionFormState, FormData>(saveTransaction, {});
+  const hydrated = useHydrated();
   const [kind, setKind] = useState(initial.kind);
   const e = state.errors ?? {};
 
   return (
     <form
+      method="post"
       onSubmit={(ev) => {
         ev.preventDefault();
         const data = new FormData(ev.currentTarget);
@@ -87,7 +90,7 @@ export function TransactionForm({ initial }: { initial: TransactionFormValues })
           {e.form}
         </p>
       )}
-      <button type="submit" disabled={pending} className={primaryButton}>
+      <button type="submit" disabled={!hydrated || pending} className={primaryButton}>
         {pending ? "Saving…" : initial.id ? "Save changes" : kind === "expense" ? "Add expense" : "Add income"}
       </button>
     </form>
