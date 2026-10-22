@@ -26,7 +26,7 @@ trap cleanup EXIT
 PGRST_DB_URI="postgres://authenticator:authenticator@127.0.0.1:$PGPORT/$DB" \
 PGRST_DB_SCHEMAS=public PGRST_DB_ANON_ROLE=anon PGRST_JWT_SECRET="$JWT_SECRET" \
 PGRST_SERVER_PORT=3001 PGRST_DB_POOL=5 "$POSTGREST_BIN" > /tmp/moneymap-postgrest.log 2>&1 & pids+=($!)
-node e2e/local/gateway.mjs > /tmp/moneymap-gateway.log 2>&1 & pids+=($!)
+GATEWAY_LOG=1 node e2e/local/gateway.mjs > /tmp/moneymap-gateway.log 2>&1 & pids+=($!)
 
 export NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_localtest

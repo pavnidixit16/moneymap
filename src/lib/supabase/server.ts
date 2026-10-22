@@ -1,10 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
+import { cache } from "react";
 import { supabaseEnv } from "./env";
 
 // Supabase client for Server Components, Server Actions and Route Handlers.
-export async function createClient() {
+// Memoised per request, so one page render shares a single client.
+export const createClient = cache(async () => {
   // Per-user data is always rendered at request time, never prerendered.
   await connection();
   const cookieStore = await cookies();
@@ -26,12 +28,13 @@ export async function createClient() {
       },
     },
   });
-}
+});
 
 // Verified identity of the signed-in user, or null. Never trusts an unverified cookie.
-export async function getVerifiedUserId(): Promise<string | null> {
+// Memoised per request: every data function calls it, but it is verified once per render.
+export const getVerifiedUserId = cache(async (): Promise<string | null> => {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims?.sub) return null;
   return data.claims.sub;
-}
+});

@@ -3,6 +3,8 @@ import { defineConfig } from "@playwright/test";
 // Browser tests run against the local stack started by e2e/local/run.sh.
 export default defineConfig({
   testDir: "e2e",
+  // Round-trip measurements only run on request: PERF=1 npm run test:e2e -- e2e/perf
+  testIgnore: process.env.PERF ? [] : ["**/perf/**"],
   fullyParallel: false,
   workers: 1,
   reporter: "list",

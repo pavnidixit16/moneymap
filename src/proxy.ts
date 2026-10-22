@@ -60,7 +60,15 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except Next.js internals and static files.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    {
+      // Everything except Next.js internals and static files. Background prefetches are
+      // skipped: they only fetch the static page shell, and every page verifies the
+      // user itself when it actually loads.
+      source: "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
   ],
 };

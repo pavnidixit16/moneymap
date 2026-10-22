@@ -26,6 +26,7 @@ const json = (res, status, body) => {
 http
   .createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
+    if (process.env.GATEWAY_LOG) console.log(`${req.method} ${url.pathname}`);
     const bearer = (req.headers.authorization ?? "").replace(/^Bearer /, "");
 
     if (url.pathname === "/auth/v1/user") {
