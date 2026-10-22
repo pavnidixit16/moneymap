@@ -1,8 +1,24 @@
 import { Suspense } from "react";
 import { Card, ErrorNote, PageHeader, Skeleton } from "@/components/ui";
-import { getProfile } from "@/lib/data";
+import { getProfile, listCommitments } from "@/lib/data";
 import { paiseToInput } from "@/lib/money";
+import { SampleDataControls } from "./sample-data";
 import { SettingsForm } from "./settings-form";
+
+async function SampleSection() {
+  let loaded = false;
+  try {
+    loaded = (await listCommitments()).some((c) => c.is_sample);
+  } catch {
+    return null;
+  }
+  return (
+    <Card className="flex flex-col gap-2">
+      <h2 className="font-semibold">Sample data</h2>
+      <SampleDataControls loaded={loaded} />
+    </Card>
+  );
+}
 
 async function SettingsContent() {
   let profile;
@@ -43,6 +59,9 @@ export default function SettingsPage() {
       <PageHeader title="Settings" subtitle="Pay, payday and budget" />
       <Suspense fallback={<Skeleton className="h-80" />}>
         <SettingsContent />
+      </Suspense>
+      <Suspense fallback={<Skeleton className="h-28" />}>
+        <SampleSection />
       </Suspense>
       <Card className="flex flex-col gap-2 text-sm text-muted">
         <p>Amounts are in Indian rupees. Dates follow Indian time.</p>

@@ -97,7 +97,13 @@ async function SpendingContent({ searchParams }: { searchParams: PageProps<"/spe
                   <Link href={`/spending/${t.id}`} className="flex justify-between gap-3 py-3">
                     <span className="flex min-w-0 flex-col">
                       <span className="font-semibold">{categoryLabel(t.category)}</span>
-                      {t.note && <span className="truncate text-xs text-muted">{t.note}</span>}
+                      {(t.note || t.is_sample) && (
+                        <span className="truncate text-xs text-muted">
+                          {t.is_sample ? "Sample" : ""}
+                          {t.is_sample && t.note ? " · " : ""}
+                          {t.note}
+                        </span>
+                      )}
                     </span>
                     <span className={`shrink-0 font-semibold tabular-nums ${t.kind === "income" ? "text-success" : ""}`}>
                       {t.kind === "income" ? "+" : ""}

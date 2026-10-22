@@ -35,13 +35,14 @@ export interface CommitmentRow extends Commitment {
   notes: string | null;
   provider: string | null;
   coverage_paise: number | null;
+  is_sample: boolean;
   previous_amount_paise: number | null;
   amount_changed_on: string | null;
   schedule_updated_at: string;
 }
 
 const COMMITMENT_COLUMNS =
-  "id, name, kind, subtype, tracking_mode, amount_paise, amount_is_estimate, frequency, anchor_day, next_due_date, end_date, maturity_date, status, review_status, notes, schedule_updated_at, provider, coverage_paise, previous_amount_paise, amount_changed_on";
+  "id, name, kind, subtype, tracking_mode, amount_paise, amount_is_estimate, frequency, anchor_day, next_due_date, end_date, maturity_date, status, review_status, notes, schedule_updated_at, provider, coverage_paise, previous_amount_paise, amount_changed_on, is_sample";
 
 export async function listCommitments(): Promise<CommitmentRow[]> {
   const { supabase } = await requireUser();
@@ -84,9 +85,10 @@ export interface TransactionRow {
   category: string;
   occurred_on: string;
   note: string | null;
+  is_sample: boolean;
 }
 
-const TRANSACTION_COLUMNS = "id, kind, amount_paise, category, occurred_on, note";
+const TRANSACTION_COLUMNS = "id, kind, amount_paise, category, occurred_on, note, is_sample";
 
 export async function listTransactions(from?: string, to?: string): Promise<TransactionRow[]> {
   const { supabase } = await requireUser();

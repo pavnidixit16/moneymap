@@ -39,6 +39,7 @@ function Row({ c, sameTypeCount }: { c: CommitmentRow; sameTypeCount: number }) 
               </Badge>
             )}
             {c.review_status === "unreviewed" && !cancelled && <Badge tone="accent">Not reviewed yet</Badge>}
+            {c.is_sample && <Badge>Sample</Badge>}
           </span>
         </span>
         <span className="shrink-0 text-right">

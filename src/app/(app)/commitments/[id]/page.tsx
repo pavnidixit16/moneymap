@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { Card, ErrorNote, PageHeader, Skeleton } from "@/components/ui";
+import { commitmentIconName, IconBubble } from "@/components/icons";
+import { Badge, Card, ErrorNote, PageHeader, Skeleton } from "@/components/ui";
+import { MODE_LABELS, subtypeLabel } from "@/lib/commitments";
 import { getCommitment, listPayments } from "@/lib/data";
-import { formatDate } from "@/lib/format";
+import { formatDate, frequencyLabel } from "@/lib/format";
 import { formatINR, paiseToInput } from "@/lib/money";
 import { cancelCommitment, deleteCommitment, reactivateCommitment } from "../actions";
 import { variantFor } from "@/lib/catalog";
@@ -37,6 +39,37 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
   return (
     <>
       {typeof error === "string" && ERRORS[error] && <ErrorNote>{ERRORS[error]}</ErrorNote>}
+      <Card className="flex items-start gap-3">
+        <IconBubble name={commitmentIconName(commitment.kind, commitment.subtype)} className="size-12" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="truncate text-lg font-semibold">{commitment.name}</p>
+          <p className="text-xs text-muted">
+            {commitment.provider ? `${commitment.provider} · ` : ""}
+            {subtypeLabel(commitment.kind, commitment.subtype)}
+            {commitment.tracking_mode !== "info" && ` · ${frequencyLabel(commitment.frequency)}`}
+          </p>
+          <p className="text-sm">
+            {commitment.tracking_mode === "info"
+              ? commitment.maturity_date
+                ? `Matures ${formatDate(commitment.maturity_date)}`
+                : "Record only, no payments due"
+              : commitment.next_due_date
+                ? `Next due ${formatDate(commitment.next_due_date)}`
+                : commitment.status === "ended"
+                  ? "All payments recorded"
+                  : ""}
+          </p>
+          <div className="flex flex-wrap gap-1">
+            <Badge tone={commitment.tracking_mode === "outflow" ? "accent" : "muted"}>
+              {commitment.tracking_mode === "outflow" ? "Counted in your estimate" : MODE_LABELS[commitment.tracking_mode].label}
+            </Badge>
+            {commitment.status === "cancelled" && <Badge tone="danger">Cancelled</Badge>}
+            {commitment.status === "ended" && <Badge>Ended</Badge>}
+            {commitment.is_sample && <Badge>Sample</Badge>}
+          </div>
+        </div>
+        <p className="shrink-0 text-lg font-semibold tabular-nums">{commitment.amount_paise > 0 ? formatINR(commitment.amount_paise) : "—"}</p>
+      </Card>
       {commitment.status === "cancelled" && (
         <Card className="flex flex-col gap-2 text-sm">
           <p>
@@ -74,7 +107,7 @@ async function EditContent({ params, searchParams }: PageProps<"/commitments/[id
       />
 
       <Card>
-        <h2 className="text-sm font-medium text-muted">Payment history</h2>
+        <h2 className="text-sm font-semibold text-muted">Payment history</h2>
         {payments.length === 0 ? (
           <p className="pt-2 text-sm text-muted">No payments recorded yet.</p>
         ) : (

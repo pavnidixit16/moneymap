@@ -62,6 +62,7 @@ function Row({ c }: { c: CommitmentRow }) {
             {c.amount_is_estimate && <Badge>Estimate</Badge>}
             {c.status === "cancelled" && <Badge tone="danger">Cancelled</Badge>}
             {c.status === "ended" && <Badge>Ended</Badge>}
+            {c.is_sample && <Badge tone="accent">Sample</Badge>}
           </span>
         </span>
         <span className="shrink-0 text-right font-semibold">{c.amount_paise > 0 ? formatINR(c.amount_paise) : "—"}</span>
