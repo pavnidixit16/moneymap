@@ -366,3 +366,21 @@ test("unsure details are fixed right on the card, without opening Edit", async (
   await confirm.click();
   await expect(text(page, /Saved ₹350 · Shopping/)).toBeVisible();
 });
+
+test("pasted OTPs and card statements are explained, not turned into spending", async ({ page }) => {
+  await signIn(page);
+  await open(page, "/spending/smart");
+  await page.getByRole("textbox").fill("Your OTP for transaction of Rs 4,999 at AMAZON is 482913. Do not share it with anyone.");
+  await page.getByRole("button", { name: "Read it" }).click();
+  await expect(text(page, "This is a one-time password message, not a transaction.")).toBeVisible();
+  await expect(review(page)).toHaveCount(0);
+
+  await page.getByRole("textbox").fill("HDFC Bank Credit Card statement. Total Amount Due: Rs. 12,345.00. Payment Due Date: 05 Nov 2026");
+  await page.getByRole("button", { name: "Read it" }).click();
+  await expect(text(page, /total due ₹12,345, due 5 Nov 2026/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Go to Commitments" })).toBeVisible();
+
+  // The user can always override.
+  await page.getByRole("button", { name: "Read it anyway" }).click();
+  await expect(text(page, "This looks like a credit-card bill payment")).toBeVisible();
+});

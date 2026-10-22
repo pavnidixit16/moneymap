@@ -5,9 +5,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SuccessNote, inputClass, primaryButton } from "@/components/ui";
 import { useHydrated } from "@/components/use-hydrated";
+import { detectMessage, IGNORE_LABELS } from "@/lib/capture/detect-message";
 import { parseExpenses } from "@/lib/capture/parse-text";
 import type { ProposedTransaction } from "@/lib/capture/types";
 import { istToday } from "@/lib/engine/dates";
+import { formatDate } from "@/lib/format";
+import { formatINR } from "@/lib/money";
 import { ImportReview } from "./import-review";
 import { ReviewCard, valuesFrom, type DraftValues } from "./review-card";
 
@@ -79,6 +82,9 @@ export function SmartEntry() {
   const [success, setSuccess] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  // Pasted text that isn't a transaction (an OTP, a failed payment, an advert, a card
+  // statement): explained instead of turned into a wrong draft. The user can still go ahead.
+  const [notice, setNotice] = useState<{ message: string; link?: boolean } | null>(null);
   const recognition = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
@@ -95,7 +101,22 @@ export function SmartEntry() {
     return { proposal, values: valuesFrom(proposal), clientRequestId: crypto.randomUUID(), queue, position, total };
   }
 
-  function startDraft(input: string, source: "text" | "voice") {
+  function startDraft(input: string, source: "text" | "voice", force = false) {
+    if (source === "text" && !force) {
+      const d = detectMessage({ source: "text", messageId: null, body: input }, istToday());
+      if (d.type === "ignore" && (d.reason === "otp" || d.reason === "failed" || d.reason === "promotion")) {
+        setNotice({ message: IGNORE_LABELS[d.reason] });
+        return;
+      }
+      if (d.type === "card_statement") {
+        const parts = [d.issuer ? `${d.issuer} credit card statement` : "Credit card statement"];
+        if (d.totalDuePaise) parts.push(`total due ${formatINR(d.totalDuePaise)}`);
+        if (d.dueDate) parts.push(`due ${formatDate(d.dueDate)}`);
+        setNotice({ message: `${parts.join(", ")}. A card bill isn't spending: add or update the card under Commitments.`, link: true });
+        return;
+      }
+    }
+    setNotice(null);
     const [first, ...rest] = parseExpenses(input, istToday(), source);
     const next = draftFor(first, rest, 1, rest.length + 1);
     setDraft(next);
@@ -259,7 +280,10 @@ export function SmartEntry() {
             {tab === "speak" ? "What you said" : "Describe an expense, or paste a bank / UPI SMS or email"}
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                setNotice(null);
+              }}
               rows={4}
               maxLength={500}
               placeholder="I spent ₹450 on dinner yesterday"
@@ -274,6 +298,21 @@ export function SmartEntry() {
           >
             <Sparkles className="size-5" aria-hidden /> Read it
           </button>
+          {notice && (
+            <div role="status" className="flex flex-col gap-2 rounded-xl border border-warning/50 p-3 text-sm">
+              <p>{notice.message}</p>
+              <div className="flex flex-wrap gap-3">
+                {notice.link && (
+                  <Link href="/commitments?tab=all" className="font-semibold text-accent underline">
+                    Go to Commitments
+                  </Link>
+                )}
+                <button type="button" onClick={() => startDraft(text, "text", true)} className="font-semibold text-accent underline">
+                  Read it anyway
+                </button>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-muted">MoneyMap reads this on your device and shows you a draft. Nothing is saved until you confirm.</p>
         </section>
       )}
