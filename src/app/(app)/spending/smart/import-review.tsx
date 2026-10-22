@@ -94,7 +94,7 @@ export function ImportReview() {
   }
 
   const update = (key: string, patch: Partial<Row>) => setRows((rs) => rs && rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  const chosen = (rows ?? []).filter((r) => r.selected && !r.imported);
+  const chosen = (rows ?? []).filter((r) => r.selected && !r.imported && !r.proposal.flags.cardBillPayment);
   const missingCategory = chosen.some((r) => r.proposal.kind === "expense" && !r.category);
   const total = chosen.reduce((s, r) => s + (r.proposal.kind === "expense" ? r.proposal.amountPaise! : 0), 0);
 
@@ -167,8 +167,9 @@ export function ImportReview() {
               <li key={r.key} className="flex gap-3 py-3">
                 <input
                   type="checkbox"
-                  checked={r.selected && !r.imported}
-                  disabled={r.imported}
+                  checked={r.selected && !r.imported && !r.proposal.flags.cardBillPayment}
+                  // A card bill paid from the bank isn't spending: the purchases on the card are.
+                  disabled={r.imported || r.proposal.flags.cardBillPayment}
                   onChange={(e) => update(r.key, { selected: e.target.checked })}
                   aria-label={`Include ${r.proposal.description} ${formatINR(r.proposal.amountPaise!)} on ${r.proposal.occurredOn}`}
                   className="mt-1 size-5 accent-[var(--accent)]"
@@ -185,11 +186,11 @@ export function ImportReview() {
                   <div className="flex flex-wrap gap-1">
                     {r.imported && <Badge>Already imported</Badge>}
                     {r.duplicate && <Badge tone="warning">Possible duplicate</Badge>}
-                    {r.proposal.flags.cardBillPayment && <Badge tone="warning">Card bill payment: mark paid under Commitments</Badge>}
+                    {r.proposal.flags.cardBillPayment && <Badge tone="warning">Card bill payment: can&apos;t be saved as spending. Mark it paid under Commitments</Badge>}
                     {r.proposal.kind === "income" && <Badge>Income: off by default</Badge>}
                     {r.proposal.issues.some((i) => i.field === "kind") && <Badge tone="warning">Check debit or credit</Badge>}
                   </div>
-                  {r.proposal.kind === "expense" && !r.imported && (
+                  {r.proposal.kind === "expense" && !r.imported && !r.proposal.flags.cardBillPayment && (
                     <select
                       aria-label={`Category for ${r.proposal.description}`}
                       value={r.category}

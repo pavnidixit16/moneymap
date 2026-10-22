@@ -306,9 +306,50 @@ test("voice: a spoken correction and a card bill are understood, with no false e
 
 test("several amounts without a correction leave the amount for the user", async ({ page }) => {
   await signIn(page);
-  await readIt(page, "dinner 450 and taxi 200 yesterday");
-  await expect(review(page)).toContainText("Several amounts found (₹450, ₹200)");
+  await readIt(page, "dinner 450 or 500 yesterday");
+  await expect(review(page)).toContainText("Several amounts found (₹450, ₹500)");
   await expect(review(page).getByLabel("Amount (₹)")).toHaveValue("");
   await expect(page.getByRole("button", { name: "Confirm and save" })).toBeDisabled();
   await review(page).getByRole("button", { name: "Discard" }).click();
+});
+
+test("statement import: a card bill payment can't be ticked", async ({ page }) => {
+  const d = `${today.slice(8)}/${today.slice(5, 7)}/${today.slice(0, 4)}`;
+  const csv = ["Date,Narration,Withdrawal Amt.,Deposit Amt.,Closing Balance", `${d},HDFC CREDIT CARD BILL PAYMENT,12000.00,,38000.00`].join("\n");
+  await signIn(page);
+  await open(page, "/spending/smart");
+  await page.getByRole("button", { name: "Statement" }).click();
+  await page.getByLabel("Statement file").setInputFiles({ name: "cards.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  const box = page.getByRole("checkbox", { name: /credit card bill/i });
+  await expect(box).not.toBeChecked();
+  await expect(box).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Confirm and save 0 selected/ })).toBeDisabled();
+});
+
+test("voice: several expenses in one go are reviewed one at a time", async ({ page }) => {
+  const words = "I have spent around 600 on shopping, 250 on cab, or 300 on food";
+  await page.addInitScript(fakeSpeech({}), { words });
+  await signIn(page);
+  await open(page, "/spending/smart");
+  await page.getByRole("button", { name: "Speak" }).click();
+  await page.getByRole("button", { name: "Start speaking" }).click();
+  await expect(page.getByRole("textbox")).toHaveValue(words);
+  await page.getByRole("button", { name: "Read it" }).click();
+
+  await expect(text(page, "Expense 1 of 3 from what you said")).toBeVisible();
+  await expect(review(page)).toContainText("₹600");
+  await expect(review(page)).toContainText("Shopping");
+  await review(page).getByRole("button", { name: "Confirm and save" }).click();
+
+  await expect(text(page, "Expense 2 of 3 from what you said")).toBeVisible();
+  await expect(text(page, /Saved ₹600 · Shopping/)).toBeVisible();
+  await expect(review(page)).toContainText("₹250");
+  await expect(review(page)).toContainText("Rides & transport");
+  await review(page).getByRole("button", { name: "Discard" }).click();
+
+  await expect(text(page, "Expense 3 of 3 from what you said")).toBeVisible();
+  await expect(review(page)).toContainText("₹300");
+  await expect(review(page)).toContainText("Food & dining");
+  await review(page).getByRole("button", { name: "Discard" }).click();
+  await expect(page.getByRole("button", { name: "Start speaking" })).toBeVisible();
 });

@@ -111,7 +111,8 @@ export function findDate(lower: string, today: ISODate): { date: ISODate | null;
   return { date: null };
 }
 
-function findAmount(text: string): { paise: number | null; issue?: string } {
+// Lower-cased text with everything that looks like money but isn't the amount removed.
+function cleanForAmounts(text: string): string {
   let t = text.toLowerCase();
   // Remove things that look like money but are not the transaction amount.
   t = t.replace(/(?:avl\.?|available|avail\.?|credit)\s*(?:lmt|limit)\.?\s*(?:is|:|-)?\s*(?:rs\.?|inr|₹)?\s*[\d,]+(?:\.\d+)?/g, " ");
@@ -126,6 +127,11 @@ function findAmount(text: string): { paise: number | null; issue?: string } {
   t = t.replace(new RegExp(`\\b${MONTH_RE}\\b\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*(?:19|20)\\d{2})?\\b`, "g"), " ");
   t = t.replace(/\b(?:in|of|since|year)\s+(?:19|20)\d{2}\b/g, " ");
   t = t.replace(/\b\d{1,2}(?:st|nd|rd|th)\b/g, " ");
+  return t;
+}
+
+function findAmount(text: string): { paise: number | null; issue?: string } {
+  const t = cleanForAmounts(text);
 
   // Self-corrections, common when speaking: "200, no actually 20,000", "make that 500",
   // "not 200 but 2,000". The amount after the last correction is the one meant.
@@ -185,14 +191,25 @@ function findDescription(text: string, lower: string, dateMatched?: string): str
   return null;
 }
 
-export function parseText(input: string, today: ISODate, source: CaptureSource = "text"): ProposedTransaction {
+// Details said once for a whole sentence ("yesterday", "by UPI", "received") that apply to
+// each expense split out of it.
+interface SharedContext {
+  kind: "expense" | "income";
+  occurredOn: ISODate | null;
+  paymentMethod: PaymentMethod | null;
+}
+
+const EXPENSE_WORDS = /\b(debited|spent|spend|paid|pay|purchase|purchased|bought|sent|transferred|withdrawn|charged)\b/;
+const INCOME_WORDS = /\b(credited|received|got paid|salary|refund|refunded|cashback)\b/;
+
+export function parseText(input: string, today: ISODate, source: CaptureSource = "text", context?: SharedContext): ProposedTransaction {
   const raw = input.trim().slice(0, 500);
   const lower = raw.toLowerCase().replace(/\s+/g, " ");
   const issues: ProposalIssue[] = [];
 
-  const isExpenseWord = /\b(debited|spent|spend|paid|pay|purchase|purchased|bought|sent|transferred|withdrawn|charged)\b/.test(lower);
-  const isIncomeWord = /\b(credited|received|got paid|salary|refund|refunded|cashback)\b/.test(lower);
-  const kind: "expense" | "income" = isIncomeWord && !isExpenseWord ? "income" : "expense";
+  const isExpenseWord = EXPENSE_WORDS.test(lower);
+  const isIncomeWord = INCOME_WORDS.test(lower);
+  const kind: "expense" | "income" = !isExpenseWord && !isIncomeWord && context ? context.kind : isIncomeWord && !isExpenseWord ? "income" : "expense";
   if (isIncomeWord && isExpenseWord) {
     issues.push({ field: "kind", message: "Both spending and income words found; check whether this is an expense." });
   }
@@ -201,7 +218,7 @@ export function parseText(input: string, today: ISODate, source: CaptureSource =
   if (amount.issue) issues.push({ field: "amount", message: amount.issue });
 
   const when = findDate(lower, today);
-  let occurredOn = when.date;
+  let occurredOn = when.date ?? context?.occurredOn ?? null;
   if (!occurredOn) {
     occurredOn = today;
     issues.push({ field: "date", message: "No date mentioned; set to today. Change it if needed." });
@@ -232,7 +249,7 @@ export function parseText(input: string, today: ISODate, source: CaptureSource =
   }
   if (!description) issues.push({ field: "description", message: "Add a short description." });
 
-  let paymentMethod: PaymentMethod | null = null;
+  let paymentMethod: PaymentMethod | null = context?.paymentMethod ?? null;
   for (const [method, re] of PAYMENT_KEYWORDS) {
     if (re.test(lower)) {
       paymentMethod = method;
@@ -259,4 +276,40 @@ export function parseText(input: string, today: ISODate, source: CaptureSource =
     flags,
     raw,
   };
+}
+
+// Several expenses in one go: "600 on shopping, 250 on cab and 300 on food yesterday".
+// Splits on commas, "and", "then", "also", "plus" and semicolons; a piece without an amount
+// (", yesterday") stays with the expense before it. Splits only when every piece has exactly
+// one amount and nobody corrected themselves; otherwise it's one draft as before.
+const SPLIT = /,(?!\d)|;|\s(?:and|then|also|plus|after that)\s/;
+const LEADING_JOINERS = /^\s*(?:and|or|then|also|plus|after that)\b\s*/;
+
+export function parseExpenses(input: string, today: ISODate, source: CaptureSource = "text"): ProposedTransaction[] {
+  const whole = parseText(input, today, source);
+  const raw = input.trim().slice(0, 500);
+  if (cleanForAmounts(raw).search(CORRECTION_CUES) >= 0) return [whole];
+
+  const groups: string[] = [];
+  let pending = "";
+  for (const piece of raw.split(new RegExp(SPLIT, "i"))) {
+    const text = piece.replace(LEADING_JOINERS, "").trim();
+    if (!text) continue;
+    if (amountsIn(cleanForAmounts(text)).length === 0) {
+      if (groups.length > 0) groups[groups.length - 1] += `, ${text}`;
+      else pending = `${pending} ${text}`.trim();
+    } else {
+      groups.push(pending ? `${pending} ${text}` : text);
+      pending = "";
+    }
+  }
+  if (groups.length < 2 || groups.some((g) => amountsIn(cleanForAmounts(g)).length !== 1)) return [whole];
+
+  const lower = raw.toLowerCase();
+  const context: SharedContext = {
+    kind: INCOME_WORDS.test(lower) && !EXPENSE_WORDS.test(lower) ? "income" : "expense",
+    occurredOn: findDate(lower.replace(/\s+/g, " "), today).date,
+    paymentMethod: whole.paymentMethod,
+  };
+  return groups.map((g) => parseText(g, today, source, context));
 }

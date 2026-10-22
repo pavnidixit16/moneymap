@@ -410,6 +410,9 @@ None of these change the calculation rules R1–R10 or the database access rules
   blank for the user to enter, unless they corrected themselves ("200, no actually 2,000",
   "make that 450", "not 200 but 300"); then the corrected amount is used and flagged for
   review. A card-bill draft can be switched back to ordinary spending if it was misread.
+  Several expenses in one sentence ("600 on shopping, 250 on cab and 300 on food") become
+  separate drafts reviewed one at a time; a date or payment method said once applies to all.
+  Voice keeps listening until the user taps stop. Card-bill rows in a statement can't be ticked.
   Calculation rules R1–R10 are unchanged.
 - Future sources (Gmail, Android SMS, bank feeds) are documented in `docs/INTEGRATIONS.md` and
   disabled in this release.

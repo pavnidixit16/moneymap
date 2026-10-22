@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseText } from "./parse-text";
+import { parseExpenses, parseText } from "./parse-text";
 
 const TODAY = "2026-10-22"; // a Thursday
 const p = (s: string) => parseText(s, TODAY);
@@ -147,5 +147,37 @@ describe("parseText: special cases", () => {
 
   it("keeps the source label", () => {
     expect(parseText("tea 20", TODAY, "voice").source).toBe("voice");
+  });
+});
+
+describe("parseExpenses: several expenses in one sentence", () => {
+  const many = (text: string) => parseExpenses(text, TODAY).map((r) => [r.amountPaise, r.category, r.occurredOn]);
+
+  it("splits the sentence from voice testing into three drafts", () => {
+    expect(many("I have spent around 600 on shopping, 250 on cab, or 300 on food")).toEqual([
+      [60000, "shopping", TODAY],
+      [25000, "transport", TODAY],
+      [30000, "food", TODAY],
+    ]);
+  });
+
+  it("shares a date and payment method said once", () => {
+    const r = parseExpenses("dinner 450 and taxi 200 yesterday by UPI", TODAY);
+    expect(r.map((x) => [x.amountPaise, x.category, x.occurredOn, x.paymentMethod])).toEqual([
+      [45000, "food", "2026-10-21", "upi"],
+      [20000, "transport", "2026-10-21", "upi"],
+    ]);
+    expect(r[0].issues.map((i) => i.field)).not.toContain("date");
+  });
+
+  it("keeps income as income in every piece", () => {
+    expect(parseExpenses("received 5000 from Ravi and 2000 from Meera", TODAY).map((r) => r.kind)).toEqual(["income", "income"]);
+  });
+
+  it("keeps one draft when there is only one expense, a correction, or an SMS", () => {
+    expect(parseExpenses("Paid 1,250 rs for groceries at BigBasket today via UPI", TODAY)).toHaveLength(1);
+    expect(parseExpenses("dinner 200, no, 2000", TODAY)).toHaveLength(1);
+    expect(parseExpenses("Rs 450.00 debited from a/c XX1234 on 21-10-26 and credited to zomato@hdfcbank. UPI Ref 123456789012", TODAY)).toHaveLength(1);
+    expect(parseExpenses("dinner 450 or 500 and taxi 200", TODAY)).toHaveLength(1); // a piece with two amounts
   });
 });

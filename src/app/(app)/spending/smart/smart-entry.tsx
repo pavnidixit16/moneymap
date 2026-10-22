@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SuccessNote, inputClass, primaryButton } from "@/components/ui";
 import { useHydrated } from "@/components/use-hydrated";
-import { parseText } from "@/lib/capture/parse-text";
+import { parseExpenses } from "@/lib/capture/parse-text";
 import { SOURCE_REGISTRY } from "@/lib/capture/sources";
 import { SOURCE_LABELS, type ProposedTransaction } from "@/lib/capture/types";
 import { istToday } from "@/lib/engine/dates";
@@ -17,6 +17,10 @@ interface Draft {
   proposal: ProposedTransaction;
   values: DraftValues;
   clientRequestId: string;
+  // When one sentence held several expenses: the ones still to review, and where we are.
+  queue?: ProposedTransaction[];
+  position?: number;
+  total?: number;
 }
 
 const STORAGE_KEY = "moneymap.smart-draft";
@@ -88,9 +92,13 @@ export function SmartEntry() {
     }
   }, []);
 
+  function draftFor(proposal: ProposedTransaction, queue: ProposedTransaction[], position: number, total: number): Draft {
+    return { proposal, values: valuesFrom(proposal), clientRequestId: crypto.randomUUID(), queue, position, total };
+  }
+
   function startDraft(input: string, source: "text" | "voice") {
-    const proposal = parseText(input, istToday(), source);
-    const next: Draft = { proposal, values: valuesFrom(proposal), clientRequestId: crypto.randomUUID() };
+    const [first, ...rest] = parseExpenses(input, istToday(), source);
+    const next = draftFor(first, rest, 1, rest.length + 1);
     setDraft(next);
     storeDraft(next);
     setSuccess(null);
@@ -105,6 +113,15 @@ export function SmartEntry() {
   }
 
   function finish(message: string | null) {
+    // Move on to the next expense from the same sentence, if any.
+    const [following, ...rest] = draft?.queue ?? [];
+    if (draft && following) {
+      const next = draftFor(following, rest, (draft.position ?? 1) + 1, draft.total ?? 1);
+      setDraft(next);
+      storeDraft(next);
+      setSuccess(message);
+      return;
+    }
     setDraft(null);
     storeDraft(null);
     setText("");
@@ -125,7 +142,9 @@ export function SmartEntry() {
     // Live results: iPhone Safari often ends a session without a "final" result, so keep
     // whatever was heard as it arrives.
     r.interimResults = true;
-    r.continuous = false;
+    // Keep listening through pauses so several expenses can be said in one go; the user taps
+    // stop when done.
+    r.continuous = true;
     let heard = "";
     r.onresult = (e) => {
       heard = Array.from(e.results).map((res) => res[0].transcript).join(" ").trim();
@@ -163,7 +182,14 @@ export function SmartEntry() {
     return (
       <>
         {restored && <p className="rounded-xl bg-surface-2 p-2 text-xs">You have an unsaved draft from earlier. Confirm it or discard it.</p>}
+        {success && <SuccessNote>{success}</SuccessNote>}
+        {(draft.total ?? 1) > 1 && (
+          <p className="text-sm font-semibold">
+            Expense {draft.position} of {draft.total} from what you said
+          </p>
+        )}
         <ReviewCard
+          key={draft.clientRequestId}
           proposal={draft.proposal}
           clientRequestId={draft.clientRequestId}
           values={draft.values}
@@ -213,7 +239,7 @@ export function SmartEntry() {
                 >
                   {listening ? <MicOff className="size-8" aria-hidden /> : <Mic className="size-8" aria-hidden />}
                 </button>
-                <p className="text-sm text-muted">{listening ? "Listening… say it like “I spent 450 on dinner yesterday”." : "Tap and say what you spent."}</p>
+                <p className="text-sm text-muted">{listening ? "Listening… tap the red button when you're done." : "Tap and say what you spent. You can list several, like “450 on dinner and 200 on a cab yesterday”."}</p>
                 <p className="text-center text-xs text-muted">
                   Your browser converts speech to text, which may use Apple&apos;s or Google&apos;s speech service. Check the text
                   below before continuing.
