@@ -82,3 +82,36 @@ test("paying a date after payday early is explained and counted in this cycle", 
   await text(page, "How is this calculated?").click();
   await expect(text(page, /includes ₹9,500 paid early for dates after your next payday/)).toBeVisible();
 });
+
+test("revisiting a tab is instant, and a change shows up immediately on other tabs", async ({ page }) => {
+  const { readFileSync } = await import("node:fs");
+  const dataCalls = () => readFileSync("/tmp/moneymap-gateway.log", "utf8").split("\n").filter((l) => l.includes("/rest/v1")).length;
+  const nav = (name: string) => page.getByRole("navigation", { name: "Main" }).getByRole("link", { name });
+  const estimateText = () => page.getByTestId("estimate").filter({ visible: true }).textContent();
+
+  await signIn(page, "a");
+  await open(page, "/overview");
+  const before = rupees(await estimateText());
+
+  await nav("Spending").click();
+  await expect(page).toHaveURL(/\/spending$/);
+  await expect(text(page, "Spending budget")).toBeVisible();
+  await nav("Home").click();
+  await expect(page.getByTestId("estimate").filter({ visible: true })).toBeVisible();
+
+  // Within the 60 s window, going back to Spending needs no new data requests.
+  const callsBefore = dataCalls();
+  await nav("Spending").click();
+  await expect(text(page, "Spending budget")).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(dataCalls() - callsBefore).toBe(0);
+
+  // After a change, other tabs show fresh figures straight away.
+  await page.getByRole("link", { name: /^Add$/ }).click();
+  await label(page, "Amount (₹)").fill("500");
+  await expect(page.getByRole("button", { name: "Add expense" })).toBeEnabled();
+  await page.getByRole("button", { name: "Add expense" }).click();
+  await expect(page).toHaveURL(/\/spending\?on=/);
+  await nav("Home").click();
+  await expect(page.getByTestId("estimate").filter({ visible: true })).toHaveText(`₹${(before - 500).toLocaleString("en-IN")}`);
+});

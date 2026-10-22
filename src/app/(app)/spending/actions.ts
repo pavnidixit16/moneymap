@@ -1,5 +1,6 @@
 "use server";
 
+import { dataChanged } from "@/lib/data-changed";
 import { redirect } from "next/navigation";
 import { fieldErrorsFrom, type FieldErrors } from "@/lib/commitments";
 import { isUuid, requireUser } from "@/lib/data";
@@ -29,6 +30,7 @@ export async function saveTransaction(_prev: TransactionFormState, formData: For
   if (error) return { errors: { form: "Couldn't save. Please check the details and try again." } };
   if (!data?.length) return { errors: { form: "This entry no longer exists." } };
 
+  dataChanged();
   redirect(`/spending?on=${parsed.data.occurred_on}`);
 }
 
@@ -38,5 +40,6 @@ export async function deleteTransaction(formData: FormData) {
   const on = String(formData.get("on") ?? "");
   if (!isUuid(id)) redirect("/spending");
   const { error } = await supabase.from("transactions").delete().eq("id", id);
+  if (!error) dataChanged();
   redirect(error ? `/spending/${id}?error=delete` : `/spending${on ? `?on=${on}` : ""}`);
 }

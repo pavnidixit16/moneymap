@@ -1,5 +1,6 @@
 "use server";
 
+import { dataChanged } from "@/lib/data-changed";
 import { redirect } from "next/navigation";
 import { commitmentFormValues, commitmentSchema, fieldErrorsFrom, type FieldErrors } from "@/lib/commitments";
 import { getCommitment, isUuid, requireUser } from "@/lib/data";
@@ -38,6 +39,7 @@ export async function saveCommitment(_prev: CommitmentFormState, formData: FormD
     : await supabase.from("commitments").insert(row);
 
   if (error) return { errors: { form: "Couldn't save. Please check the details and try again." } };
+  dataChanged();
   redirect("/commitments?tab=all");
 }
 
@@ -46,6 +48,7 @@ async function setStatus(formData: FormData, status: "active" | "cancelled") {
   const id = String(formData.get("id") ?? "");
   if (!isUuid(id)) redirect("/commitments");
   const { error } = await supabase.from("commitments").update({ status }).eq("id", id);
+  if (!error) dataChanged();
   redirect(`/commitments/${id}${error ? "?error=status" : ""}`);
 }
 
@@ -63,5 +66,6 @@ export async function deleteCommitment(formData: FormData) {
   if (!isUuid(id)) redirect("/commitments");
   // Payment history is removed with it (database cascade); the page warns about this.
   const { error } = await supabase.from("commitments").delete().eq("id", id);
+  if (!error) dataChanged();
   redirect(error ? `/commitments/${id}?error=delete` : "/commitments");
 }

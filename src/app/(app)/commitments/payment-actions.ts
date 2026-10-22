@@ -1,6 +1,6 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { dataChanged } from "@/lib/data-changed";
 import { redirect } from "next/navigation";
 import { isISODate, istToday } from "@/lib/engine/dates";
 import { isUuid, requireUser } from "@/lib/data";
@@ -44,7 +44,7 @@ async function resolve(commitmentId: string, items: Item[]): Promise<ActionResul
   if (!isUuid(commitmentId)) return { error: "This item no longer exists." };
   const { error } = await supabase.rpc("resolve_occurrences", { p_commitment_id: commitmentId, p_items: items });
   if (error) return { error: messageFor(error) };
-  refresh();
+  dataChanged();
   return { ok: true };
 }
 
@@ -95,7 +95,7 @@ export async function undoPayment(_prev: ActionResult, formData: FormData): Prom
   if (!isUuid(id)) return { error: "This payment no longer exists." };
   const { error } = await supabase.rpc("undo_payment", { p_payment_id: id });
   if (error) return { error: messageFor(error) };
-  refresh();
+  dataChanged();
   return { ok: true };
 }
 
@@ -114,6 +114,6 @@ export async function editPayment(_prev: ActionResult, formData: FormData): Prom
     .select("id");
   if (dbError) return { error: messageFor(dbError) };
   if (!data?.length) return { error: "Only paid records can be edited." };
-  refresh();
+  dataChanged();
   return { ok: true };
 }

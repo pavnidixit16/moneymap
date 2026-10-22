@@ -1,6 +1,6 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { dataChanged } from "@/lib/data-changed";
 import { isUuid, requireUser } from "@/lib/data";
 
 export interface ReviewState {
@@ -32,6 +32,6 @@ export async function setReview(_prev: ReviewState, formData: FormData): Promise
     .eq("kind", "subscription")
     .select("id");
   if (error || !data?.length) return { error: "Couldn't update this subscription. Please try again." };
-  refresh();
+  dataChanged();
   return {};
 }
