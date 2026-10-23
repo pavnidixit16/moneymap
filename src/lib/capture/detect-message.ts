@@ -4,7 +4,7 @@
 // message never leaves this function, and nothing here saves anything.
 import { addDays, type ISODate } from "../engine/dates";
 import { parseRupees } from "../money";
-import { cleanForAmounts, findDate, parseText } from "./parse-text";
+import { amountsIn, cleanForAmounts, findDate, parseText } from "./parse-text";
 import type { CaptureSource, ProposedTransaction } from "./types";
 
 export interface IncomingMessage {
@@ -134,7 +134,10 @@ function amountAfter(text: string, label: RegExp): number | null {
 
 export function detectMessage(message: IncomingMessage, today: ISODate): Detection {
   const subject = (message.subject ?? "").trim();
-  const body = stripFooter(message.body);
+  // Greetings name no one: "Dear Customer, Thank you for banking with us."
+  const body = stripFooter(message.body)
+    .replace(/\b(?:dear|hello|hi)\s+(?:valued\s+)?(?:customer|sir|madam|cardholder|member|user)\b[,.!]?/gi, " ")
+    .replace(/\bthank you for (?:banking|choosing|being|using)\b[^.!\n]*[.!]?/gi, " ");
   const text = `${subject}\n${body}`.slice(0, 5000);
   const lower = text.toLowerCase().replace(/\s+/g, " ");
   const provider = message.from ? providerFor(message.from) : null;
@@ -170,8 +173,34 @@ export function detectMessage(message: IncomingMessage, today: ISODate): Detecti
     proposal.amountPaise = sure;
     proposal.issues = proposal.issues.filter((i) => i.field !== "amount");
     delete proposal.flags.amountOptions;
+  } else if (message.source !== "text") {
+    // Emails and SMS are full of reference, account and phone numbers: only amounts with
+    // a currency sign count, and the user picks if there's more than one.
+    const options = amountsIn(cleanForAmounts(text), true);
+    proposal.issues = proposal.issues.filter((i) => i.field !== "amount");
+    delete proposal.flags.amountOptions;
+    if (options.length === 0) return { type: "ignore", reason: "no_amount" };
+    if (options.length === 1) proposal.amountPaise = options[0];
+    else {
+      proposal.amountPaise = null;
+      proposal.flags.amountOptions = options.slice(0, 4);
+      proposal.issues.push({ field: "amount", message: "More than one amount in this email. Tap the one that was paid." });
+    }
   }
-  if (proposal.amountPaise === null && !proposal.issues.some((i) => i.message.startsWith("Several amounts"))) {
+
+  // UPI path in bank alerts: "UPI/<ref>/DR/<payee>/<bank>/<vpa>". DR is money out, CR in.
+  const upi = lower.match(/\bupi\/\w+\/(dr|cr)\/([^/]*)\/[a-z]{4}\/(\S+)/);
+  if (upi) {
+    proposal.kind = upi[1] === "cr" ? "income" : "expense";
+    proposal.issues = proposal.issues.filter((i) => i.field !== "kind");
+    if (proposal.kind === "income") proposal.category = "income";
+    const payee = upi[2].trim();
+    proposal.description = /^[a-z][a-z .]{2,}$/.test(payee) && payee !== "some"
+      ? `UPI ${proposal.kind === "income" ? "from" : "to"} ${payee.replace(/\b[a-z]/g, (c) => c.toUpperCase())}`
+      : `${provider?.name ?? "Bank"} UPI ${proposal.kind === "income" ? "credit" : "payment"}`;
+    proposal.issues = proposal.issues.filter((i) => i.field !== "description");
+  }
+  if (proposal.amountPaise === null && !proposal.flags.amountOptions) {
     return { type: "ignore", reason: "no_amount" };
   }
   if (provider?.bank && (proposal.issues.some((i) => i.field === "description") || !proposal.description)) {

@@ -4,7 +4,7 @@ import { sessionCookie, USERS } from "./local/session";
 
 // The stand-in Google server (e2e/local/fake-google.mjs) holds six emails: an HDFC UPI
 // alert (₹640, Zomato), a Swiggy receipt (₹375), an OTP, an HDFC card statement, a
-// Netflix renewal (₹649) and an IndusInd alert (₹162.13, with a ₹2.9 lakh balance).
+// Netflix renewal (₹649) and an IndusInd alert (₹20.00, with a ₹2.9 lakh balance).
 async function signIn(page: Page, user: keyof typeof USERS) {
   await page.context().clearCookies();
   await page.context().addCookies([{ ...sessionCookie(user), domain: "localhost", path: "/" }]);
@@ -49,8 +49,8 @@ test("connect Gmail, review detected payments, save only what's confirmed, never
   await expect(zomato).toBeChecked();
   await expect(swiggy).toBeChecked();
   // The balance is never the amount, and a QR code is never the name.
-  const indusind = page.getByRole("checkbox", { name: /Include IndusInd Bank payment ₹162\.13/ });
-  await expect(page.getByRole("checkbox", { name: /2,92,221|tmqr|reachus/i })).toHaveCount(0);
+  const indusind = page.getByRole("checkbox", { name: /Include IndusInd Bank UPI payment ₹20 / });
+  await expect(page.getByRole("checkbox", { name: /2,92,221|4,43,41|18,60,26|tmqr|reachus|banking/i })).toHaveCount(0);
   // Clear amount but no category yet: offered, not pre-ticked, so Confirm isn't blocked.
   await expect(indusind).not.toBeChecked();
   await expect(page.locator("body")).toContainText("Order Total: ₹375"); // preview text decoded

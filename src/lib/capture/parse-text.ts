@@ -65,6 +65,10 @@ const looksLikeCode = (word: string) => /[a-z]/.test(word) && /\d/.test(word) &&
 
 const titleCase = (s: string) => s.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 
+// Indian day/month(/year): "21/10", "21-10-26", "21.10.2026". A dot needs all three parts,
+// and nothing right after a currency sign counts, so "INR 40.00" or "₹20.10" stays an amount.
+const NUMERIC_DATE = /(?<!(?:₹|\brs\.?|\binr)\s*)\b(\d{1,2})(?:([/-])(\d{1,2})(?:\2(\d{2,4}))?|\.(\d{1,2})\.(\d{2,4}))\b/;
+
 export function findDate(lower: string, today: ISODate): { date: ISODate | null; issue?: string; matched?: string } {
   if (/\bday before yesterday\b/.test(lower)) return { date: addDays(today, -2), matched: "day before yesterday" };
   if (/\b(yesterday|last night)\b/.test(lower)) return { date: addDays(today, -1), matched: lower.match(/\b(yesterday|last night)\b/)![0] };
@@ -96,9 +100,11 @@ export function findDate(lower: string, today: ISODate): { date: ISODate | null;
     if (date) return { date, matched: isoMatch[0] };
   }
   // Indian order: day / month / year.
-  const numeric = lower.match(/\b(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?\b/);
+  const numeric = lower.match(NUMERIC_DATE);
   if (numeric) {
-    const date = build(numeric[3] ? Number(numeric[3]) : thisYear, Number(numeric[2]), Number(numeric[1]), Boolean(numeric[3]));
+    const month = numeric[3] ?? numeric[5];
+    const year = numeric[4] ?? numeric[6];
+    const date = build(year ? Number(year) : thisYear, Number(month), Number(numeric[1]), Boolean(year));
     if (date) return { date, matched: numeric[0] };
   }
   const dayMonth = lower.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s-]*(?:of\\s+)?${MONTH_RE}\\b[\\s,-]*(\\d{2,4})?\\b`));
@@ -118,7 +124,7 @@ export function findDate(lower: string, today: ISODate): { date: ISODate | null;
 export function cleanForAmounts(text: string): string {
   let t = text.toLowerCase();
   // Dates and times first, so a date between "balance" and its amount doesn't hide it.
-  t = t.replace(/\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/g, " ");
+  t = t.replace(new RegExp(NUMERIC_DATE.source, "g"), " ");
   t = t.replace(/\b20\d{2}-\d{1,2}-\d{1,2}\b/g, " ");
   t = t.replace(/\b\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:am|pm|hrs|ist))?\b/g, " ");
   t = t.replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?[\\s-]*(?:of\\s+)?${MONTH_RE}\\b(?:[\\s,-]*(?:19|20)\\d{2})?\\b`, "g"), " ");
@@ -132,7 +138,8 @@ export function cleanForAmounts(text: string): string {
   t = t.replace(/\b(?:avl|bal|balance|balances)\b[^\d;\n]{0,45}[\d,]+(?:\.\d+)?/g, " ");
   t = t.replace(/(?:a\/c|acct|account|card|ac)\s*(?:no\.?)?\s*(?:ending\s*(?:with|in)?\s*)?[x*]*\d{2,}/g, " ");
   t = t.replace(/[x*]{2,}\d+/g, " ");
-  t = t.replace(/\b(?:ref|reference|txn|utr|upi ref|rrn)\.?\s*(?:no\.?|id|number)?\s*(?:is)?\s*:?\s*\w+/g, " ");
+  // "Ref no 6294…", "UTR: AXN12…": only a value with digits in it, on the same line.
+  t = t.replace(/\b(?:ref|reference|txn|utr|upi ref|rrn)\.?[ \t]*(?:no\.?|id|number)?[ \t]*(?:is)?[ \t]*:?[ \t]*\w*\d\w*/g, " ");
   return t;
 }
 
@@ -166,14 +173,16 @@ const CORRECTION_CUES = /\b(?:no+,? (?:no+,? )?(?:actually|wait|sorry|i mean)|ac
 
 // Distinct amounts (in paise, in order of appearance) in already-cleaned text. Amounts with a
 // currency marker win; bare numbers are used only when nothing is marked.
-function amountsIn(t: string): number[] {
+// With currencyOnly, bare numbers are never amounts (emails are full of reference and
+// phone numbers).
+export function amountsIn(t: string, currencyOnly = false): number[] {
   const tagged: { at: number; value: string }[] = [];
   for (const m of t.matchAll(/(?:₹|\brs\.?|\binr)\s*([\d,]+(?:\.\d{1,2})?)/g)) tagged.push({ at: m.index, value: m[1] });
   for (const m of t.matchAll(/\b([\d,]+(?:\.\d{1,2})?)\s*(?:rupees|rs\b|inr\b|bucks)/g)) tagged.push({ at: m.index, value: m[1] });
   for (const m of t.matchAll(/\b(\d+(?:\.\d)?)\s*k\b/g)) tagged.push({ at: m.index, value: String(Math.round(Number(m[1]) * 1000)) });
 
   let candidates = tagged.sort((a, b) => a.at - b.at).map((c) => c.value);
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && !currencyOnly) {
     // Dates, day numbers ("the 21st") and years were already removed by the caller.
     candidates = [...t.matchAll(/\b(\d[\d,]*(?:\.\d{1,2})?)\b/g)].map((m) => m[1]);
   }
@@ -181,7 +190,8 @@ function amountsIn(t: string): number[] {
 }
 
 function findDescription(text: string, lower: string, dateMatched?: string): string | null {
-  const vpa = lower.match(/\b([a-z][a-z0-9.]{1,30})@[a-z]{2,}/);
+  // A VPA ("name@bank"), not an email address ("reachus@indusind.com").
+  const vpa = lower.match(/\b([a-z][a-z0-9.]{1,30})@[a-z]{2,}\b(?![.\w])/);
   // A merchant VPA like "zomato@hdfcbank" names the payee; a code like "tmqr61p679@ybl" doesn't.
   if (vpa && !looksLikeCode(vpa[1])) return titleCase(vpa[1].replace(/[._]/g, " ").replace(/\d+$/, "").trim());
   let scan = lower;

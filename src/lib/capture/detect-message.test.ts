@@ -116,8 +116,53 @@ describe("detectMessage: balances, footers and confidence (real-inbox fixes)", (
     const large = email({ from: indusind, body: "INR 2,50,000.00 debited from A/c XX5678 by NEFT to Ravi" });
     expect(large.type === "transaction" && large.proposal.flags.likely).toBeUndefined();
 
-    const vague = email({ from: indusind, body: "Transaction alert: 450 and 1200 on your account", receivedOn: "2026-10-22" });
+    const vague = email({ from: indusind, body: "Transaction alert: Rs 450 and Rs 1200 on your account", receivedOn: "2026-10-22" });
     expect(vague.type === "transaction" && vague.proposal.flags.likely).toBeUndefined();
     expect(vague.type === "transaction" && vague.proposal.flags.amountOptions).toEqual([45000, 120000]);
   });
+});
+
+describe("detectMessage: real IndusInd alerts (from testing)", () => {
+  const from = "IndusInd Bank <transactionalert@indusind.com>";
+  const subject = "IndusInd Bank Transaction Alert";
+  const footer = " The available balance in your account is INR 2,92,221.73. For any queries call 1860 267 7777 or write to reachus@indusind.com.";
+
+  it.each([
+    ["Debited for INR 20.00 towards UPI/004434195647/DR/SOME/YESB/tmqr61p679@ptys .", "expense", 2000, "IndusInd Bank UPI payment"],
+    ["Debited for INR 40.00 towards UPI/951045557272/DR/Hung/YESB/m-51367251@ptys .", "expense", 4000, "UPI to Hung"],
+    ["Credited for INR 3850.00 towards UPI/523897431764/CR/PAVN/INDB/871065381-2@ybl/Paym.", "income", 385000, "UPI from Pavn"],
+  ])("%s", (line, kind, paise, description) => {
+    const d = detectMessage(
+      { source: "gmail", messageId: "abc123", from, subject, body: `IndusInd Bank Dear Customer, Thank you for banking with us. Your IndusInd Bank Account No. 15XXXXX5381 has been ${line}${footer}`, receivedOn: "2026-10-21" },
+      "2026-10-23",
+    );
+    expect(d.type).toBe("transaction");
+    if (d.type !== "transaction") return;
+    expect(d.proposal).toMatchObject({ kind, amountPaise: paise, description, occurredOn: "2026-10-21" });
+    expect(d.proposal.flags.amountOptions).toBeUndefined();
+    expect(d.proposal.flags.likely).toBe(true);
+  });
+
+  it("never offers reference or phone numbers as amounts", () => {
+    const d = detectMessage({ source: "gmail", messageId: "abc124", from, subject, body: `Payment reference 951045557272 processed. Call 1860 267 7777.` }, "2026-10-23");
+    expect(d).toEqual({ type: "ignore", reason: "no_amount" });
+  });
+
+  it("reads small amounts with paise, and never as dates", () => {
+    expect(parseAmount("Debited for INR 20.10 on 21-10-2026")).toBe(2010);
+    expect(parseAmount("Debited for Rs.5.50")).toBe(550);
+  });
+});
+
+function parseAmount(body: string) {
+  const d = detectMessage({ source: "gmail", messageId: "abc125", from: "alerts@indusind.com", body }, "2026-10-23");
+  return d.type === "transaction" ? d.proposal.amountPaise : null;
+}
+
+it("a subject ending in 'txn' doesn't hide the amount that follows", () => {
+  const d = detectMessage(
+    { source: "gmail", messageId: "abc126", from: "HDFC Bank InstaAlerts <alerts@hdfcbank.net>", subject: "You have done a UPI txn", body: "Dear Customer, Rs.640.00 has been debited from account **1234 to VPA zomato@hdfcbank ZOMATO. Your UPI transaction reference number is 629412345678." },
+    "2026-10-23",
+  );
+  expect(d.type === "transaction" && d.proposal.amountPaise).toBe(64000);
 });
