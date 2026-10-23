@@ -311,6 +311,80 @@ do $$ begin
 end $$;
 select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
 
+-- ---------------------------------------------------------------- migration 7 Progress (A, then B)
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$
+declare before_tx int;
+begin
+  -- Transactions saved earlier in this script already credited today; start the day afresh.
+  if (select count(*) from public.daily_checkins where local_date = private.ist_today()) <> 1 then
+    raise exception 'FAIL: saving transactions did not credit today''s check-in';
+  end if;
+  delete from public.daily_checkins;
+  select count(*) into before_tx from public.transactions;
+  insert into public.daily_checkins (local_date, kind) values (private.ist_today(), 'no_spend');
+  if (select count(*) from public.transactions) <> before_tx then
+    raise exception 'FAIL: a check-in created a transaction';
+  end if;
+  -- One check-in per day, whatever the kind.
+  begin
+    insert into public.daily_checkins (local_date, kind) values (private.ist_today(), 'reviewed_activity');
+    raise exception 'FAIL: two check-ins saved for one day';
+  exception when unique_violation then null; end;
+  -- No backdating or future-dating.
+  begin
+    insert into public.daily_checkins (local_date, kind) values (private.ist_today() - 1, 'no_spend');
+    raise exception 'FAIL: a check-in was saved for another day';
+  exception when check_violation then null; end;
+  begin
+    insert into public.daily_checkins (local_date, kind) values (private.ist_today(), 'saved_money');
+    raise exception 'FAIL: unknown check-in kind accepted';
+  exception when check_violation or unique_violation then null; end;
+  -- Recording an expense dated today turns a no-spend day into a reviewed day.
+  insert into public.transactions (kind, amount_paise, category, occurred_on, source)
+  values ('expense', 12000, 'food', private.ist_today(), 'text');
+  if (select kind from public.daily_checkins where local_date = private.ist_today()) <> 'reviewed_activity' then
+    raise exception 'FAIL: recording an expense did not correct the no-spend day';
+  end if;
+  insert into public.achievements (key) values ('money_mindful');
+  begin
+    insert into public.achievements (key) values ('money_mindful');
+    raise exception 'FAIL: an achievement was earned twice';
+  exception when unique_violation then null; end;
+  begin
+    insert into public.achievements (key) values ('saved_lakhs');
+    raise exception 'FAIL: unknown achievement accepted';
+  exception when check_violation then null; end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
+do $$ begin
+  if (select count(*) from public.daily_checkins where user_id = 'aaaaaaaa-0000-4000-8000-000000000001') <> 0
+     or (select count(*) from public.achievements) <> 0 then
+    raise exception 'FAIL: user B can see user A''s check-ins or achievements';
+  end if;
+  update public.daily_checkins set kind = 'no_spend';
+  delete from public.achievements;
+  begin
+    insert into public.daily_checkins (user_id, local_date, kind) values ('aaaaaaaa-0000-4000-8000-000000000001', private.ist_today(), 'no_spend');
+    raise exception 'FAIL: user B checked in for user A';
+  exception when insufficient_privilege or unique_violation then null; end;
+  -- Sample data never counts as a check-in.
+  delete from public.daily_checkins;
+  insert into public.transactions (kind, amount_paise, category, occurred_on, source, is_sample)
+  values ('expense', 5000, 'food', private.ist_today(), 'sample', true);
+  if (select count(*) from public.daily_checkins) <> 0 then
+    raise exception 'FAIL: sample data created a check-in';
+  end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$ begin
+  if (select kind from public.daily_checkins) <> 'reviewed_activity' or (select count(*) from public.achievements) <> 1 then
+    raise exception 'FAIL: user B changed user A''s check-ins or achievements';
+  end if;
+  raise notice 'PASS: check-ins are one per day, never create transactions, and are private to each user';
+end $$;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
+
 -- ---------------------------------------------------------------- anonymous visitor
 reset role;
 set local role anon;
@@ -319,7 +393,7 @@ select set_config('request.jwt.claims', '', true);
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles', 'transactions', 'commitments', 'commitment_payments', 'gmail_connections', 'gmail_dismissed'] loop
+  foreach t in array array['profiles', 'transactions', 'commitments', 'commitment_payments', 'gmail_connections', 'gmail_dismissed', 'daily_checkins', 'achievements'] loop
     begin
       execute format('select count(*) from public.%I', t);
       raise exception 'FAIL: anonymous visitor could query %', t;

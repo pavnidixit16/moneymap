@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ChevronRight, Plus, Repeat } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { commitmentIconName, IconBubble } from "@/components/icons";
@@ -298,6 +298,10 @@ export default function CommitmentsPage({ searchParams }: PageProps<"/commitment
           </ButtonLink>
         }
       />
+      <Link href="/subscriptions" className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 text-sm font-semibold">
+        <Repeat className="size-5 text-accent" aria-hidden /> Subscriptions: what they cost each month and year
+        <ChevronRight className="ml-auto size-4 text-muted" aria-hidden />
+      </Link>
       <Suspense fallback={null}>
         <Welcome searchParams={searchParams} />
       </Suspense>

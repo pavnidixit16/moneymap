@@ -10,6 +10,12 @@ export const USERS = {
   g: { id: "44444444-4444-4444-8444-444444444444", email: "tester-g@example.invalid" },
   d: { id: "55555555-5555-4555-8555-555555555555", email: "deny-d@example.invalid" },
   e: { id: "66666666-6666-4666-8666-666666666666", email: "noscope-e@example.invalid" },
+  // Progress tests: each starts from an empty account.
+  p: { id: "77777777-7777-4777-8777-777777777771", email: "progress-p@example.invalid" },
+  q: { id: "77777777-7777-4777-8777-777777777772", email: "progress-q@example.invalid" },
+  r: { id: "77777777-7777-4777-8777-777777777773", email: "progress-r@example.invalid" },
+  s: { id: "77777777-7777-4777-8777-777777777774", email: "progress-s@example.invalid" },
+  t: { id: "77777777-7777-4777-8777-777777777775", email: "progress-t@example.invalid" },
 } as const;
 
 const b64url = (v: string | Buffer) => Buffer.from(v).toString("base64url");

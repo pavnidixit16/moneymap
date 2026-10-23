@@ -1,15 +1,17 @@
 "use client";
 
-import { CalendarClock, ChartPie, House, Repeat, Settings } from "lucide-react";
+import { CalendarClock, ChartPie, Flame, House, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Five tabs fit a 360px phone. Subscriptions are commitments, so their page (reached from
+// Home and Commitments) highlights the Commitments tab.
 const TABS = [
-  { href: "/overview", label: "Home", icon: House },
-  { href: "/commitments", label: "Commitments", icon: CalendarClock },
-  { href: "/spending", label: "Spending", icon: ChartPie },
-  { href: "/subscriptions", label: "Subscriptions", icon: Repeat },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/overview", label: "Home", icon: House, also: [] as string[] },
+  { href: "/commitments", label: "Commitments", icon: CalendarClock, also: ["/subscriptions"] },
+  { href: "/spending", label: "Spending", icon: ChartPie, also: [] },
+  { href: "/progress", label: "Progress", icon: Flame, also: [] },
+  { href: "/settings", label: "Settings", icon: Settings, also: [] },
 ];
 
 export function BottomNav() {
@@ -20,8 +22,8 @@ export function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
     >
       <ul className="mx-auto flex max-w-md">
-        {TABS.map(({ href, label, icon: TabIcon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+        {TABS.map(({ href, label, icon: TabIcon, also }) => {
+          const active = [href, ...also].some((h) => pathname === h || pathname.startsWith(`${h}/`));
           return (
             <li key={href} className="flex-1">
               <Link

@@ -70,3 +70,20 @@ body {
 input[type="date"] {
   min-height: 2.75rem;
 }
+
+/* Progress: a subtle rise for celebrations and confirmations; none for reduced motion. */
+@keyframes mm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[mm-rise_300ms_ease-out\] {
+    animation: none;
+  }
+}
