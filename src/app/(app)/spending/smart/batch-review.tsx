@@ -80,7 +80,9 @@ export function BatchReview({
           imported: done.has(r.key),
           selected:
             !done.has(r.key) && !dup.has(r.key) && r.proposal.kind === "expense" && r.proposal.amountPaise !== null &&
-            !r.proposal.flags.cardBillPayment && !r.proposal.issues.some((i) => i.field === "kind" || i.field === "amount"),
+            !r.proposal.flags.cardBillPayment && !r.proposal.issues.some((i) => i.field === "kind" || i.field === "amount") &&
+            // Emails vary far more than statement rows: only pre-tick what the reader is sure of.
+            (source !== "gmail" || (r.proposal.flags.likely === true && Boolean(r.proposal.category))),
         })),
       );
     });
@@ -159,6 +161,7 @@ export function BatchReview({
               <div className="flex flex-wrap gap-1">
                 {r.imported && <Badge>{source === "gmail" ? "Already saved" : "Already imported"}</Badge>}
                 {r.duplicate && <Badge tone="warning">Possible duplicate</Badge>}
+                {source === "gmail" && (parseRupees(r.amount) ?? 0) > 10_000_000 && <Badge tone="warning">Large amount: check it</Badge>}
                 {r.proposal.flags.cardBillPayment && !r.imported && <Badge tone="warning">Card bill payment: can&apos;t be saved as spending. Mark it paid under Commitments</Badge>}
                 {r.proposal.kind === "income" && <Badge>Income: off by default</Badge>}
                 {r.proposal.issues.some((i) => i.field === "kind") && <Badge tone="warning">Check debit or credit</Badge>}
@@ -171,6 +174,21 @@ export function BatchReview({
               {r.proposal.amountPaise === null && savable(r) && (
                 <label className="flex flex-col gap-1 text-xs text-warning">
                   {r.proposal.issues.find((i) => i.field === "amount")?.message ?? "Enter the amount."}
+                  {r.proposal.flags.amountOptions && (
+                    <span className="flex flex-wrap gap-2">
+                      {r.proposal.flags.amountOptions.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          aria-pressed={parseRupees(r.amount) === p}
+                          onClick={() => update(r.key, { amount: paiseToInput(p), selected: true })}
+                          className={`rounded-full border px-3 py-1 text-sm font-semibold ${parseRupees(r.amount) === p ? "border-accent bg-accent text-accent-foreground" : "border-border text-foreground"}`}
+                        >
+                          {formatINR(p)}
+                        </button>
+                      ))}
+                    </span>
+                  )}
                   <input
                     aria-label={`Amount for ${r.proposal.description}`}
                     inputMode="decimal"

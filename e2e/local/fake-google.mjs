@@ -39,6 +39,8 @@ const MESSAGES = [
   message("18f0000000000003", "HDFC Bank <alerts@hdfcbank.net>", "OTP for your transaction", "Your OTP for transaction of Rs 4,999 at AMAZON is 482913. Do not share it with anyone.", 1),
   message("18f0000000000004", "HDFC Bank Credit Cards <emailstatements.cards@hdfcbank.net>", "Your HDFC Bank Credit Card statement", "Total Amount Due: Rs. 12,345.00. Minimum Amount Due: Rs. 620.00. Payment Due Date: 05 Nov 2026.", 3),
   message("18f0000000000005", "Netflix <info@account.netflix.com>", "Your Netflix membership payment", "We've charged ₹649 for your monthly membership.", 4),
+  // Worded like a real IndusInd alert: balance after the amount, payee as a QR code, footer.
+  message("18f0000000000006", "IndusInd Bank <transactionalert@indusind.com>", "Transaction alert", "Dear Customer, your A/c 1234XXXXXX5678 is debited for INR 162.13 on 22-10-2026 towards UPI/tmqr61p679@ybl. Available Balance is INR 2,92,221.73. To reach us, call 1860 267 7777 or write to reachus@indusind.com.", 1),
 ];
 
 const json = (res, status, body) => {

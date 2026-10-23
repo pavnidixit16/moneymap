@@ -4,7 +4,7 @@
 // message never leaves this function, and nothing here saves anything.
 import { addDays, type ISODate } from "../engine/dates";
 import { parseRupees } from "../money";
-import { findDate, parseText } from "./parse-text";
+import { cleanForAmounts, findDate, parseText } from "./parse-text";
 import type { CaptureSource, ProposedTransaction } from "./types";
 
 export interface IncomingMessage {
@@ -51,6 +51,16 @@ const PROVIDERS: Provider[] = [
   { name: "American Express", match: /americanexpress|aexp|amex/, bank: true },
   { name: "IDFC FIRST Bank", match: /idfcfirst|idfcfb/, bank: true },
   { name: "Yes Bank", match: /yesbank|yesbnk/, bank: true },
+  { name: "IndusInd Bank", match: /indusind|indusb/, bank: true },
+  { name: "Federal Bank", match: /federalbank|fedbnk/, bank: true },
+  { name: "AU Bank", match: /aubank|aubnk/, bank: true },
+  { name: "RBL Bank", match: /rblbank|rblbnk/, bank: true },
+  { name: "HSBC", match: /hsbc/, bank: true },
+  { name: "Standard Chartered", match: /sc\.com|stanchart|scbank/, bank: true },
+  { name: "Punjab National Bank", match: /pnb/, bank: true },
+  { name: "Bank of Baroda", match: /bankofbaroda|bobtxn|bobsms/, bank: true },
+  { name: "Canara Bank", match: /canarabank|canbnk/, bank: true },
+  { name: "Union Bank", match: /unionbank|unionb/, bank: true },
   { name: "Swiggy", match: /swiggy/, category: "food" },
   { name: "Zomato", match: /zomato/, category: "food" },
   { name: "Uber", match: /uber\.com|\buber\b/, category: "transport" },
@@ -77,6 +87,40 @@ const MONEY_MOVED = /\b(debited|credited|spent|paid|payment of|charged|purchase|
 const STATEMENT = /\b(statement)\b/;
 const TOTAL_DUE = /\b(?:total|amount)\s+(?:amount\s+)?due\b/;
 
+// Where an email's own text ends and its footer (contact details, disclaimers, adverts)
+// begins. Footers mention amounts and names that aren't the transaction.
+const FOOTER = /\b(?:reach us|contact us|call us|customer care|for any (?:queries|query|clarification)|in case you (?:have not|did not|haven't)|if you have not done|this is a system[- ]generated|do not reply|please do not reply|disclaimer|unsubscribe|privacy policy|terms and conditions|t&c|warm regards|regards,|sincerely|never share)\b/i;
+
+function stripFooter(body: string): string {
+  const m = body.match(FOOTER);
+  // Keep at least the first 40 characters: some alerts start with "Dear customer, …".
+  return m && m.index !== undefined && m.index > 40 ? body.slice(0, m.index) : body;
+}
+
+// The amount the bank says moved: next to "debited", "credited", "spent", "sent"…
+// ("INR 162.13 debited", "debited by Rs 500", "transaction of ₹1,299", "spent INR 320").
+const CUR = "(?:₹|rs\\.?|inr)\\s*([\\d,]+(?:\\.\\d{1,2})?)";
+const VERB = "(?:debited|credited|spent|paid|sent|received|withdrawn|charged|transferred|deducted|refunded)";
+const ANCHORED = [
+  new RegExp(`${CUR}\\s*(?:has been|have been|was|is|got)?\\s*${VERB}`),
+  new RegExp(`${VERB}\\s*(?:with|by|for|of)?\\s*(?:an amount of|amount)?\\s*${CUR}`),
+  new RegExp(`\\b(?:transaction|txn|payment|purchase|debit|credit|withdrawal|transfer)\\s+(?:of|for)\\s+${CUR}`),
+];
+
+function anchoredAmount(cleaned: string): number | null {
+  const found = new Set<number>();
+  for (const re of ANCHORED) {
+    for (const m of cleaned.matchAll(new RegExp(re.source, "g"))) {
+      const p = parseRupees(m[1]);
+      if (p) found.add(p);
+    }
+  }
+  // Exactly one amount tied to a debit/credit word: that's it. More than one: let the user pick.
+  return found.size === 1 ? [...found][0] : null;
+}
+
+const LARGE = 10_000_000; // ₹1,00,000 in paise: shown, but never ticked in advance
+
 function providerFor(from: string): Provider | null {
   const f = from.toLowerCase();
   return PROVIDERS.find((p) => p.match.test(f)) ?? null;
@@ -90,7 +134,8 @@ function amountAfter(text: string, label: RegExp): number | null {
 
 export function detectMessage(message: IncomingMessage, today: ISODate): Detection {
   const subject = (message.subject ?? "").trim();
-  const text = `${subject}\n${message.body}`.slice(0, 5000);
+  const body = stripFooter(message.body);
+  const text = `${subject}\n${body}`.slice(0, 5000);
   const lower = text.toLowerCase().replace(/\s+/g, " ");
   const provider = message.from ? providerFor(message.from) : null;
 
@@ -118,13 +163,20 @@ export function detectMessage(message: IncomingMessage, today: ISODate): Detecti
 
   // Merchant receipts: prefer the order total over item prices.
   const receiptTotal = provider && !provider.bank ? amountAfter(lower, /\b(?:order total|grand total|total paid|amount paid|total amount|total)\b/) : null;
-  const proposal = parseText(message.body.length > 0 ? `${subject}. ${message.body}` : subject, today, message.source);
-  if (receiptTotal) {
-    proposal.amountPaise = receiptTotal;
+  const proposal = parseText(body.length > 0 ? `${subject}. ${body}` : subject, today, message.source);
+  const anchored = receiptTotal ? null : anchoredAmount(cleanForAmounts(text));
+  const sure = receiptTotal ?? anchored;
+  if (sure) {
+    proposal.amountPaise = sure;
     proposal.issues = proposal.issues.filter((i) => i.field !== "amount");
+    delete proposal.flags.amountOptions;
   }
   if (proposal.amountPaise === null && !proposal.issues.some((i) => i.message.startsWith("Several amounts"))) {
     return { type: "ignore", reason: "no_amount" };
+  }
+  if (provider?.bank && (proposal.issues.some((i) => i.field === "description") || !proposal.description)) {
+    proposal.description = `${provider.name} ${proposal.kind === "income" ? "credit" : "payment"}`;
+    proposal.issues = proposal.issues.filter((i) => i.field !== "description");
   }
   if (provider && !provider.bank) {
     proposal.description = provider.name;
@@ -141,6 +193,9 @@ export function detectMessage(message: IncomingMessage, today: ISODate): Detecti
   }
   proposal.sourceRef = message.messageId;
   proposal.raw = text.slice(0, 500);
+  // Pre-tick in a list only when the amount came from a clear rule (the bank's debit
+  // wording or a receipt total), nothing else is uncertain, and it isn't unusually large.
+  if (sure && sure <= LARGE && !proposal.issues.some((i) => i.field === "amount" || i.field === "kind")) proposal.flags.likely = true;
   return { type: "transaction", proposal, provider: provider?.name ?? null };
 }
 

@@ -9,7 +9,7 @@ import { useHydrated } from "@/components/use-hydrated";
 import { formatDate } from "@/lib/format";
 import { formatINR } from "@/lib/money";
 import { BatchReview, type BatchItem } from "./batch-review";
-import { checkGmail, disconnectGmail, hideGmailMessages, type GmailCheckResult, type GmailItem, type GmailStatus } from "./gmail-actions";
+import { checkGmail, disconnectGmail, hideGmailMessages, removeGmailTransactions, type GmailCheckResult, type GmailItem, type GmailStatus } from "./gmail-actions";
 
 const CONNECT_RESULTS: Record<string, { ok: boolean; text: string }> = {
   connected: { ok: true, text: "Gmail connected. Tap “Check Gmail now” to look for recent payments." },
@@ -56,6 +56,7 @@ export function GmailPanel({ status, connectResult }: { status: GmailStatus; con
   const [items, setItems] = useState<GmailItem[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [pending, startTransition] = useTransition();
   const [checking, startCheck] = useTransition();
   const banner = connectResult ? CONNECT_RESULTS[connectResult] : undefined;
@@ -121,6 +122,21 @@ export function GmailPanel({ status, connectResult }: { status: GmailStatus; con
           ? "Gmail disconnected. MoneyMap's access was removed at Google and its Gmail data deleted. Transactions you confirmed stay."
           : "Gmail disconnected here and MoneyMap's Gmail data deleted. Google couldn't be reached to remove access, so also remove MoneyMap in your Google Account → Security → Third-party connections.",
       );
+      router.refresh();
+    });
+  }
+
+  function removeSaved() {
+    startTransition(async () => {
+      const r = await removeGmailTransactions().catch(() => ({ error: "Couldn't reach MoneyMap. Try again.", removed: undefined }));
+      setConfirmRemove(false);
+      if (r.error) {
+        setMessage(r.error);
+        return;
+      }
+      setCheck(null);
+      setItems([]);
+      setMessage(`Removed ${r.removed} transaction${r.removed === 1 ? "" : "s"} saved from Gmail. Tap “Check Gmail now” to review those emails again.`);
       router.refresh();
     });
   }
@@ -210,6 +226,31 @@ export function GmailPanel({ status, connectResult }: { status: GmailStatus; con
         />
       )}
       {check?.items && items.length === 0 && !check.error && <p className="text-sm">Nothing new to review.</p>}
+
+      {status.savedCount > 0 && (
+        <div className="border-t border-border pt-3 text-sm">
+          {confirmRemove ? (
+            <div className="flex flex-col gap-2">
+              <p>
+                Remove all {status.savedCount} transaction{status.savedCount === 1 ? "" : "s"} saved from Gmail? Your other entries
+                aren&apos;t touched, and the emails can be reviewed again.
+              </p>
+              <div className="flex gap-3">
+                <button type="button" disabled={pending} onClick={removeSaved} className="font-semibold text-danger underline">
+                  Yes, remove them
+                </button>
+                <button type="button" onClick={() => setConfirmRemove(false)} className="font-semibold underline">
+                  Keep them
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmRemove(true)} className="font-semibold text-muted underline">
+              Saved something by mistake? Remove the {status.savedCount} transaction{status.savedCount === 1 ? "" : "s"} saved from Gmail
+            </button>
+          )}
+        </div>
+      )}
 
       {conn && status.available && (
         <div className="border-t border-border pt-3 text-sm">

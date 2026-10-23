@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 import { sessionCookie, USERS } from "./local/session";
 
-// The stand-in Google server (e2e/local/fake-google.mjs) holds five emails: an HDFC UPI
-// alert (₹640, Zomato), a Swiggy receipt (₹375), an OTP, an HDFC card statement and a
-// Netflix renewal (₹649).
+// The stand-in Google server (e2e/local/fake-google.mjs) holds six emails: an HDFC UPI
+// alert (₹640, Zomato), a Swiggy receipt (₹375), an OTP, an HDFC card statement, a
+// Netflix renewal (₹649) and an IndusInd alert (₹162.13, with a ₹2.9 lakh balance).
 async function signIn(page: Page, user: keyof typeof USERS) {
   await page.context().clearCookies();
   await page.context().addCookies([{ ...sessionCookie(user), domain: "localhost", path: "/" }]);
@@ -36,7 +36,7 @@ test("connect Gmail, review detected payments, save only what's confirmed, never
   // Nothing is read until the user asks.
   expect((await googleState()).messageFetches).toBe(0);
   await page.getByRole("button", { name: "Check Gmail now" }).click();
-  await expect(text(page, /Checked 5 emails: 4 to review, 1 skipped/)).toBeVisible();
+  await expect(text(page, /Checked 6 emails: 5 to review, 1 skipped/)).toBeVisible();
   expect((await googleState()).lastQuery).toMatch(/^from:\(hdfcbank\.net OR .*\) newer_than:30d/);
 
   // The card statement goes to Commitments; it is never a spending row.
@@ -48,6 +48,12 @@ test("connect Gmail, review detected payments, save only what's confirmed, never
   const netflix = page.getByRole("checkbox", { name: /Include Netflix ₹649/ });
   await expect(zomato).toBeChecked();
   await expect(swiggy).toBeChecked();
+  // The balance is never the amount, and a QR code is never the name.
+  const indusind = page.getByRole("checkbox", { name: /Include IndusInd Bank payment ₹162\.13/ });
+  await expect(page.getByRole("checkbox", { name: /2,92,221|tmqr|reachus/i })).toHaveCount(0);
+  // Clear amount but no category yet: offered, not pre-ticked, so Confirm isn't blocked.
+  await expect(indusind).not.toBeChecked();
+  await expect(page.locator("body")).toContainText("Order Total: ₹375"); // preview text decoded
   await swiggy.uncheck();
   await expect(page.getByRole("button", { name: /Confirm and save 2 selected \(₹1,289 spending\)/ })).toBeVisible();
   await netflix.uncheck();
@@ -60,6 +66,7 @@ test("connect Gmail, review detected payments, save only what's confirmed, never
   await page.getByRole("button", { name: "Check Gmail now" }).click();
   await page.getByRole("checkbox", { name: /Include Swiggy ₹375/ }).uncheck();
   await page.getByRole("checkbox", { name: /Include Netflix ₹649/ }).uncheck();
+  await page.getByRole("checkbox", { name: /Include IndusInd/ }).uncheck();
   await page.getByRole("button", { name: /Confirm and save 1 selected/ }).click();
   await expect(text(page, "Saved 1 transaction.")).toBeVisible();
 
@@ -70,8 +77,8 @@ test("connect Gmail, review detected payments, save only what's confirmed, never
   // A second check skips the saved and hidden emails without opening them.
   const before = (await googleState()).messageFetches;
   await page.getByRole("button", { name: "Check Gmail now" }).click();
-  await expect(text(page, /Checked 5 emails: 2 to review, 1 skipped .*, 2 already saved or hidden/)).toBeVisible();
-  expect((await googleState()).messageFetches - before).toBe(3);
+  await expect(text(page, /Checked 6 emails: 3 to review, 1 skipped .*, 2 already saved or hidden/)).toBeVisible();
+  expect((await googleState()).messageFetches - before).toBe(4);
   await expect(page.getByRole("checkbox", { name: /Include Zomato/ })).toHaveCount(0);
 
   await open(page, "/spending");
@@ -105,6 +112,24 @@ test("another user can't see or use this Gmail connection", async ({ page }) => 
   await gmailTab(page);
   await expect(page.getByRole("button", { name: "Connect Gmail" })).toBeVisible();
   await expect(text(page, "tester@gmail.com")).toHaveCount(0);
+});
+
+test("a mistaken save can be undone in one go", async ({ page }) => {
+  await signIn(page, "g");
+  await gmailTab(page);
+  await page.getByRole("button", { name: /Remove the 1 transaction saved from Gmail/ }).click();
+  await page.getByRole("button", { name: "Yes, remove them" }).click();
+  await expect(text(page, /Removed 1 transaction saved from Gmail/)).toBeVisible();
+  await open(page, "/spending");
+  await expect(page.getByRole("link", { name: /₹640/ })).toHaveCount(0);
+
+  // The email is offered again, and can be saved again.
+  await gmailTab(page);
+  await page.getByRole("button", { name: "Check Gmail now" }).click();
+  // (Netflix was hidden earlier, so it is not offered.)
+  for (const name of [/Include Swiggy/, /Include IndusInd/]) await page.getByRole("checkbox", { name }).uncheck();
+  await page.getByRole("button", { name: /Confirm and save 1 selected \(₹640 spending\)/ }).click();
+  await expect(text(page, "Saved 1 transaction.")).toBeVisible();
 });
 
 test("disconnect revokes access at Google and deletes the stored token", async ({ page }) => {

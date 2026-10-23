@@ -75,3 +75,49 @@ describe("detectMessage: what is never proposed", () => {
     expect(email({ body })).toEqual({ type: "ignore", reason });
   });
 });
+
+describe("detectMessage: balances, footers and confidence (real-inbox fixes)", () => {
+  const indusind = "IndusInd Bank <transactionalert@indusind.com>";
+
+  it("never reads the available balance as the amount, however it is worded", () => {
+    const bodies = [
+      "Dear Customer, your A/c 1234XXXXXX5678 is debited for INR 162.13 on 22-10-2026 towards UPI/zomato@hdfcbank. Available Balance is INR 2,92,221.73.",
+      "INR 162.13 has been debited from your account XX5678 on 22/10/26. Your available balance in the account as on 22-10-2026 is ₹ 2,92,221.73",
+      "Rs.162.13 debited from A/c **5678. Updated balance: Rs.2,92,221.73. UPI Ref 629412345678",
+      "Your A/c XX5678 is debited with ₹162.13. Avl Bal ₹2,92,221.73",
+    ];
+    for (const body of bodies) {
+      const d = email({ from: indusind, body });
+      expect(d.type === "transaction" && d.proposal.amountPaise, body).toBe(16213);
+    }
+  });
+
+  it("reads a credit as income and names it after the bank when the payee is a code", () => {
+    const d = email({ from: indusind, body: "Your A/c XX5678 has been credited with INR 3,850.00 by UPI from tmqr61p679@ybl on 22-10-2026. Available Balance: INR 2,92,383.86" });
+    expect(d.type).toBe("transaction");
+    if (d.type !== "transaction") return;
+    expect(d.proposal).toMatchObject({ kind: "income", amountPaise: 385000 });
+    expect(d.proposal.description).not.toMatch(/tmqr/i);
+  });
+
+  it("ignores the email footer", () => {
+    const d = email({
+      from: indusind,
+      body: "INR 500.00 debited from your A/c XX5678 for UPI txn to swiggy@icici. To reach us, call 1860 267 7777 or write to reachus@indusind.com. Never share your OTP or PIN.",
+    });
+    expect(d.type === "transaction" && d.proposal.description).not.toMatch(/reach/i);
+    expect(d.type === "transaction" && d.proposal.amountPaise).toBe(50000);
+  });
+
+  it("pre-ticks only clear-cut, normal-sized amounts", () => {
+    const clear = email({ from: indusind, body: "INR 162.13 debited from A/c XX5678 towards zomato@hdfcbank. Avl Bal INR 2,92,221.73" });
+    expect(clear.type === "transaction" && clear.proposal.flags.likely).toBe(true);
+
+    const large = email({ from: indusind, body: "INR 2,50,000.00 debited from A/c XX5678 by NEFT to Ravi" });
+    expect(large.type === "transaction" && large.proposal.flags.likely).toBeUndefined();
+
+    const vague = email({ from: indusind, body: "Transaction alert: 450 and 1200 on your account", receivedOn: "2026-10-22" });
+    expect(vague.type === "transaction" && vague.proposal.flags.likely).toBeUndefined();
+    expect(vague.type === "transaction" && vague.proposal.flags.amountOptions).toEqual([45000, 120000]);
+  });
+});

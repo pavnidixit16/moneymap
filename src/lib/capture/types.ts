@@ -33,6 +33,8 @@ export interface ProposedTransaction {
   // Special cases the review screen must handle instead of saving an ordinary expense.
   flags: {
     cardBillPayment?: boolean; // paying a credit-card bill: record it under Commitments
+    amountOptions?: number[]; // several amounts found: the user picks one (paise)
+    likely?: boolean; // the source is confident enough to pre-tick this draft in a list
     subscriptionHint?: { name: string; frequency: "monthly" | "yearly" | "quarterly" | "weekly" };
   };
   // What the source saw, kept for the user's reference (never parsed again).

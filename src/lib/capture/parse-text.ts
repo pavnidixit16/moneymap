@@ -60,6 +60,9 @@ const CARD_ISSUER_WORDS: [string, RegExp][] = [
 const CARD_BILL =
   /\b(?:credit ?card|cc)\s+(?:bill|dues|outstanding|payment|statement)\b|\bcard\s+(?:bill|dues|outstanding)\b|\b(?:bill|dues)\s+(?:for|of|on)\s+(?:my\s+|the\s+)?(?:[a-z]+\s+){0,2}(?:credit\s*)?card\b/;
 
+// "tmqr61p679", "q12345678": letters and digits mixed, so a reference, not a name.
+const looksLikeCode = (word: string) => /[a-z]/.test(word) && /\d/.test(word) && !/^\d+(st|nd|rd|th)$/.test(word);
+
 const titleCase = (s: string) => s.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 
 export function findDate(lower: string, today: ISODate): { date: ISODate | null; issue?: string; matched?: string } {
@@ -112,25 +115,28 @@ export function findDate(lower: string, today: ISODate): { date: ISODate | null;
 }
 
 // Lower-cased text with everything that looks like money but isn't the amount removed.
-function cleanForAmounts(text: string): string {
+export function cleanForAmounts(text: string): string {
   let t = text.toLowerCase();
-  // Remove things that look like money but are not the transaction amount.
-  t = t.replace(/(?:avl\.?|available|avail\.?|credit)\s*(?:lmt|limit)\.?\s*(?:is|:|-)?\s*(?:rs\.?|inr|₹)?\s*[\d,]+(?:\.\d+)?/g, " ");
-  t = t.replace(/(?:avl\.?|available|avail\.?|closing|opening|total)?\s*bal(?:ance)?\.?\s*(?:is|:|-)?\s*(?:rs\.?|inr|₹)?\s*[\d,]+(?:\.\d+)?/g, " ");
-  t = t.replace(/(?:a\/c|acct|account|card|ac)\s*(?:no\.?)?\s*(?:ending\s*(?:with|in)?\s*)?[x*]*\d{2,}/g, " ");
-  t = t.replace(/[x*]{2,}\d+/g, " ");
-  t = t.replace(/\b(?:ref|reference|txn|utr|upi ref)\.?\s*(?:no\.?|id)?\s*:?\s*\w+/g, " ");
+  // Dates and times first, so a date between "balance" and its amount doesn't hide it.
   t = t.replace(/\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/g, " ");
   t = t.replace(/\b20\d{2}-\d{1,2}-\d{1,2}\b/g, " ");
-  t = t.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ");
+  t = t.replace(/\b\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:am|pm|hrs|ist))?\b/g, " ");
   t = t.replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?[\\s-]*(?:of\\s+)?${MONTH_RE}\\b(?:[\\s,-]*(?:19|20)\\d{2})?\\b`, "g"), " ");
   t = t.replace(new RegExp(`\\b${MONTH_RE}\\b\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*(?:19|20)\\d{2})?\\b`, "g"), " ");
   t = t.replace(/\b(?:in|of|since|year)\s+(?:19|20)\d{2}\b/g, " ");
   t = t.replace(/\b\d{1,2}(?:st|nd|rd|th)\b/g, " ");
+  // Remove things that look like money but are not the transaction amount: limits and
+  // balances, however the bank words them ("Avl Bal", "available balance in your account
+  // is INR …", "updated balance: ₹…").
+  t = t.replace(/\b(?:avl\.?|available|avail\.?|credit|total|card)\s*(?:lmt|limit)\b[^\d;\n]{0,30}[\d,]+(?:\.\d+)?/g, " ");
+  t = t.replace(/\b(?:avl|bal|balance|balances)\b[^\d;\n]{0,45}[\d,]+(?:\.\d+)?/g, " ");
+  t = t.replace(/(?:a\/c|acct|account|card|ac)\s*(?:no\.?)?\s*(?:ending\s*(?:with|in)?\s*)?[x*]*\d{2,}/g, " ");
+  t = t.replace(/[x*]{2,}\d+/g, " ");
+  t = t.replace(/\b(?:ref|reference|txn|utr|upi ref|rrn)\.?\s*(?:no\.?|id|number)?\s*(?:is)?\s*:?\s*\w+/g, " ");
   return t;
 }
 
-function findAmount(text: string): { paise: number | null; issue?: string } {
+function findAmount(text: string): { paise: number | null; issue?: string; options?: number[] } {
   const t = cleanForAmounts(text);
 
   // Self-corrections, common when speaking: "200, no actually 20,000", "make that 500",
@@ -152,7 +158,7 @@ function findAmount(text: string): { paise: number | null; issue?: string } {
   const unique = amountsIn(t);
   if (unique.length === 0) return { paise: null, issue: "No amount found. Enter the amount." };
   // Never guess between amounts: the user picks.
-  if (unique.length > 1) return { paise: null, issue: `Several amounts found (${unique.map(formatINR).join(", ")}). Enter the right one.` };
+  if (unique.length > 1) return { paise: null, issue: `Several amounts found (${unique.map(formatINR).join(", ")}). Choose or enter the right one.`, options: unique.slice(0, 4) };
   return { paise: unique[0] };
 }
 
@@ -176,13 +182,14 @@ function amountsIn(t: string): number[] {
 
 function findDescription(text: string, lower: string, dateMatched?: string): string | null {
   const vpa = lower.match(/\b([a-z][a-z0-9.]{1,30})@[a-z]{2,}/);
-  if (vpa) return titleCase(vpa[1].replace(/[._]/g, " "));
+  // A merchant VPA like "zomato@hdfcbank" names the payee; a code like "tmqr61p679@ybl" doesn't.
+  if (vpa && !looksLikeCode(vpa[1])) return titleCase(vpa[1].replace(/[._]/g, " ").replace(/\d+$/, "").trim());
   let scan = lower;
   if (dateMatched) scan = scan.replace(dateMatched, " ");
   const phrase = scan.match(/\b(?:at|to|towards|for|on|from)\s+(?:vpa\s+)?([a-z][a-z0-9&' .-]{1,40}?)(?=\s+(?:on|via|using|ref|from|dated|with|by|for|at|yesterday|today|last|this)\b|[.,;]|\s+\d|$)/);
   if (phrase) {
     const words = phrase[1].trim().replace(/^(the|a|an|my)\s+/, "");
-    if (words && !/^(rs|inr|upi|a\/c|account|card)$/.test(words)) return titleCase(words);
+    if (words && !/^(rs|inr|upi|a\/c|account|card)$/.test(words) && !words.split(" ").some(looksLikeCode)) return titleCase(words);
   }
   for (const [, re] of CATEGORY_KEYWORDS) {
     const m = lower.match(re);
@@ -227,6 +234,7 @@ export function parseText(input: string, today: ISODate, source: CaptureSource =
   }
 
   const flags: ProposedTransaction["flags"] = {};
+  if (amount.options) flags.amountOptions = amount.options;
   if (CARD_BILL.test(lower)) flags.cardBillPayment = true;
 
   let category: string | null = kind === "income" ? "income" : null;

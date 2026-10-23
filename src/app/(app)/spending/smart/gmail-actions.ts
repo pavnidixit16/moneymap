@@ -6,12 +6,13 @@
 // id), and hidden ones are remembered by message id only. Email text, subjects and tokens
 // are never logged.
 import { detectMessage, type Detection } from "@/lib/capture/detect-message";
+import { dataChanged } from "@/lib/data-changed";
 import { requireUser } from "@/lib/data";
 import { istToday, type ISODate } from "@/lib/engine/dates";
 import { gmailConfig } from "@/lib/gmail/config";
 import { decryptToken } from "@/lib/gmail/crypto";
 import { getMessage, GoogleError, listMessageIds, refreshAccessToken, revokeToken } from "@/lib/gmail/google";
-import { header, messageText, receivedOn, searchQuery, senderName } from "@/lib/gmail/message";
+import { header, htmlToText, messageText, receivedOn, searchQuery, senderName } from "@/lib/gmail/message";
 
 const MAX_MESSAGES = 25;
 const PARALLEL = 5;
@@ -20,6 +21,7 @@ const MESSAGE_ID = /^[0-9a-zA-Z_-]{6,64}$/;
 export interface GmailStatus {
   available: boolean; // the Gmail settings are configured on the server
   connection: { email: string; status: "connected" | "needs_reconnect"; lastCheckedAt: string | null } | null;
+  savedCount: number; // transactions saved from Gmail, so a bad save can be undone in one go
 }
 
 export interface GmailItem {
@@ -43,10 +45,14 @@ export interface GmailCheckResult {
 export async function getGmailStatus(): Promise<GmailStatus> {
   const { supabase } = await requireUser();
   const available = gmailConfig() !== null;
-  const { data } = await supabase.from("gmail_connections").select("google_email, status, last_checked_at").maybeSingle();
+  const [{ data }, { count }] = await Promise.all([
+    supabase.from("gmail_connections").select("google_email, status, last_checked_at").maybeSingle(),
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("source", "gmail"),
+  ]);
   return {
     available,
     connection: data ? { email: data.google_email, status: data.status, lastCheckedAt: data.last_checked_at } : null,
+    savedCount: count ?? 0,
   };
 }
 
@@ -88,7 +94,7 @@ export async function checkGmail(): Promise<GmailCheckResult> {
           continue;
         }
         if (detection.type === "transaction") detection.proposal.raw = ""; // the snippet is shown instead
-        items.push({ messageId: m.id, sender: senderName(from).slice(0, 80), subject, receivedOn: receivedOn(m) ?? null, snippet: (m.snippet ?? "").slice(0, 200), detection });
+        items.push({ messageId: m.id, sender: senderName(from).slice(0, 80), subject, receivedOn: receivedOn(m) ?? null, snippet: htmlToText(m.snippet ?? "").slice(0, 200), detection });
       }
     }
 
@@ -130,4 +136,14 @@ export async function disconnectGmail(): Promise<{ revoked: boolean; error?: str
   ]);
   if (a.error || b.error) return { revoked, error: "Couldn't finish disconnecting. Try again." };
   return { revoked };
+}
+
+// Undo: deletes every transaction the user saved from Gmail (their own rows only, by RLS).
+// Those emails are then offered again on the next check, so they can be reviewed afresh.
+export async function removeGmailTransactions(): Promise<{ removed?: number; error?: string }> {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase.from("transactions").delete().eq("source", "gmail").select("id");
+  if (error) return { error: "Couldn't remove them. Nothing was changed; try again." };
+  if (data.length) dataChanged();
+  return { removed: data.length };
 }
