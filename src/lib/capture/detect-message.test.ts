@@ -70,7 +70,7 @@ describe("detectMessage: what is never proposed", () => {
     ["failed", "Your payment of Rs 1,200 to Uber was declined."],
     ["promotion", "Get up to 50% off on your next purchase! Limited time offer, apply now."],
     ["not_financial", "Your package has been shipped and will arrive on Friday."],
-    ["no_amount", "Your transaction is complete. Thank you for paying with UPI."],
+    ["not_financial", "Your transaction is complete. Thank you for paying with UPI."],
   ])("%s", (reason, body) => {
     expect(email({ body })).toEqual({ type: "ignore", reason });
   });
@@ -116,9 +116,14 @@ describe("detectMessage: balances, footers and confidence (real-inbox fixes)", (
     const large = email({ from: indusind, body: "INR 2,50,000.00 debited from A/c XX5678 by NEFT to Ravi" });
     expect(large.type === "transaction" && large.proposal.flags.likely).toBeUndefined();
 
+    // A bank email without a debit/credit line isn't a transaction at all.
     const vague = email({ from: indusind, body: "Transaction alert: Rs 450 and Rs 1200 on your account", receivedOn: "2026-10-22" });
-    expect(vague.type === "transaction" && vague.proposal.flags.likely).toBeUndefined();
-    expect(vague.type === "transaction" && vague.proposal.flags.amountOptions).toEqual([45000, 120000]);
+    expect(vague).toEqual({ type: "ignore", reason: "not_financial" });
+
+    // A merchant email with two amounts: the user taps the right one.
+    const receipt = email({ from: "noreply@flipkart.com", body: "Thank you for your purchase. Shirt ₹799, Shoes ₹1,499." });
+    expect(receipt.type === "transaction" && receipt.proposal.flags.likely).toBeUndefined();
+    expect(receipt.type === "transaction" && receipt.proposal.flags.amountOptions).toEqual([79900, 149900]);
   });
 });
 
@@ -145,7 +150,7 @@ describe("detectMessage: real IndusInd alerts (from testing)", () => {
 
   it("never offers reference or phone numbers as amounts", () => {
     const d = detectMessage({ source: "gmail", messageId: "abc124", from, subject, body: `Payment reference 951045557272 processed. Call 1860 267 7777.` }, "2026-10-23");
-    expect(d).toEqual({ type: "ignore", reason: "no_amount" });
+    expect(d).toEqual({ type: "ignore", reason: "not_financial" });
   });
 
   it("reads small amounts with paise, and never as dates", () => {
@@ -165,4 +170,18 @@ it("a subject ending in 'txn' doesn't hide the amount that follows", () => {
     "2026-10-23",
   );
   expect(d.type === "transaction" && d.proposal.amountPaise).toBe(64000);
+});
+
+it("skips bank notices that mention amounts but say nothing was debited or credited", () => {
+  const d = detectMessage(
+    {
+      source: "gmail",
+      messageId: "abc127",
+      from: "IndusInd Bank <alerts@indusind.com>",
+      subject: "Important: Revised Maximum Limits Applicable to Your Debit Card",
+      body: "Dear Customer, The maximum permissible daily transaction limits for your Virtual Gold Debit Card will be enhanced effective 15th November 2026. Your revised limits will be ₹1 for ATM and ₹3,00000 for POS/e-commerce transactions.",
+    },
+    "2026-10-23",
+  );
+  expect(d).toEqual({ type: "ignore", reason: "not_financial" });
 });

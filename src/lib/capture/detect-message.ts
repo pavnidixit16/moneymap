@@ -168,6 +168,10 @@ export function detectMessage(message: IncomingMessage, today: ISODate): Detecti
   const receiptTotal = provider && !provider.bank ? amountAfter(lower, /\b(?:order total|grand total|total paid|amount paid|total amount|total)\b/) : null;
   const proposal = parseText(body.length > 0 ? `${subject}. ${body}` : subject, today, message.source);
   const anchored = receiptTotal ? null : anchoredAmount(cleanForAmounts(text));
+  // A bank email or SMS is a transaction only if it says money moved: an amount next to
+  // "debited", "credited", "spent"… Notices about limits, offers or rule changes mention
+  // amounts too, but nothing was paid.
+  if (message.source !== "text" && (!provider || provider.bank) && !anchored) return { type: "ignore", reason: "not_financial" };
   const sure = receiptTotal ?? anchored;
   if (sure) {
     proposal.amountPaise = sure;
