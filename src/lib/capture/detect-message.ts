@@ -97,26 +97,32 @@ function stripFooter(body: string): string {
   return m && m.index !== undefined && m.index > 40 ? body.slice(0, m.index) : body;
 }
 
-// The amount the bank says moved: next to "debited", "credited", "spent", "sent"…
-// ("INR 162.13 debited", "debited by Rs 500", "transaction of ₹1,299", "spent INR 320").
+// The amount the message says moved, next to a debit/credit word ("INR 162.13 debited",
+// "Debited for INR 20.00", "credited with ₹3,850"). Bank emails and SMS must say debited or
+// credited; merchant receipts and typed text may also say spent, paid and so on.
 const CUR = "(?:₹|rs\\.?|inr)\\s*([\\d,]+(?:\\.\\d{1,2})?)";
-const VERB = "(?:debited|credited|spent|paid|sent|received|withdrawn|charged|transferred|deducted|refunded)";
-const ANCHORED = [
-  new RegExp(`${CUR}\\s*(?:has been|have been|was|is|got)?\\s*${VERB}`),
-  new RegExp(`${VERB}\\s*(?:with|by|for|of)?\\s*(?:an amount of|amount)?\\s*${CUR}`),
-  new RegExp(`\\b(?:transaction|txn|payment|purchase|debit|credit|withdrawal|transfer)\\s+(?:of|for)\\s+${CUR}`),
-];
+const STRICT_VERB = "(debited|credited)";
+const ANY_VERB = "(debited|credited|spent|paid|sent|received|withdrawn|charged|transferred|deducted|refunded)";
 
-function anchoredAmount(cleaned: string): number | null {
-  const found = new Set<number>();
-  for (const re of ANCHORED) {
-    for (const m of cleaned.matchAll(new RegExp(re.source, "g"))) {
-      const p = parseRupees(m[1]);
-      if (p) found.add(p);
+function anchors(verb: string) {
+  return [
+    { re: new RegExp(`${CUR}\\s*(?:has been|have been|was|is|got)?\\s*${verb}`, "g"), amount: 1, verb: 2 },
+    { re: new RegExp(`${verb}\\s*(?:with|by|for|of)?\\s*(?:an amount of|amount)?\\s*${CUR}`, "g"), amount: 2, verb: 1 },
+  ];
+}
+
+function anchoredAmount(cleaned: string, strict: boolean): { paise: number; credited: boolean } | null {
+  const found = new Map<number, string>();
+  for (const a of anchors(strict ? STRICT_VERB : ANY_VERB)) {
+    for (const m of cleaned.matchAll(a.re)) {
+      const p = parseRupees(m[a.amount]);
+      if (p && !found.has(p)) found.set(p, m[a.verb]);
     }
   }
   // Exactly one amount tied to a debit/credit word: that's it. More than one: let the user pick.
-  return found.size === 1 ? [...found][0] : null;
+  if (found.size !== 1) return null;
+  const [[paise, verb]] = [...found];
+  return { paise, credited: /^(credited|received|refunded)$/.test(verb) };
 }
 
 const LARGE = 10_000_000; // ₹1,00,000 in paise: shown, but never ticked in advance
@@ -167,11 +173,19 @@ export function detectMessage(message: IncomingMessage, today: ISODate): Detecti
   // Merchant receipts: prefer the order total over item prices.
   const receiptTotal = provider && !provider.bank ? amountAfter(lower, /\b(?:order total|grand total|total paid|amount paid|total amount|total)\b/) : null;
   const proposal = parseText(body.length > 0 ? `${subject}. ${body}` : subject, today, message.source);
-  const anchored = receiptTotal ? null : anchoredAmount(cleanForAmounts(text));
-  // A bank email or SMS is a transaction only if it says money moved: an amount next to
-  // "debited", "credited", "spent"… Notices about limits, offers or rule changes mention
-  // amounts too, but nothing was paid.
-  if (message.source !== "text" && (!provider || provider.bank) && !anchored) return { type: "ignore", reason: "not_financial" };
+  const strict = message.source !== "text" && (!provider || provider.bank === true);
+  const anchor = receiptTotal ? null : anchoredAmount(cleanForAmounts(text), strict);
+  const anchored = anchor?.paise ?? null;
+  if (anchor && strict) {
+    // "Debited" is money out, "credited" money in, whatever else the email says.
+    proposal.kind = anchor.credited ? "income" : "expense";
+    if (anchor.credited) proposal.category = "income";
+    else if (proposal.category === "income") proposal.category = null;
+    proposal.issues = proposal.issues.filter((i) => i.field !== "kind");
+  }
+  // A bank email or SMS is a transaction only if it says "debited" or "credited" next to an
+  // amount. Notices about limits, offers or rule changes mention amounts, but nothing moved.
+  if (strict && !anchored) return { type: "ignore", reason: "not_financial" };
   const sure = receiptTotal ?? anchored;
   if (sure) {
     proposal.amountPaise = sure;

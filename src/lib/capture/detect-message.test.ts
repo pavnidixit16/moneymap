@@ -23,8 +23,17 @@ describe("detectMessage: bank alerts", () => {
   });
 
   it("uses the message date when the text has none", () => {
-    const d = email({ from: "alerts@axisbank.com", body: "INR 320.00 spent on Axis Bank Card XX9876 at UBER INDIA.", receivedOn: "2026-10-19" });
+    const d = email({ from: "alerts@axisbank.com", body: "INR 320.00 debited from Axis Bank A/c XX9876 at UBER INDIA.", receivedOn: "2026-10-19" });
     expect(d.type === "transaction" && d.proposal.occurredOn).toBe("2026-10-19");
+  });
+
+  it("bank emails count only when they say debited or credited", () => {
+    // Decided in testing: "spent", "paid" etc. from a bank are not enough on their own.
+    expect(email({ from: "alerts@axisbank.com", body: "INR 320.00 spent on Axis Bank Card XX9876 at UBER INDIA." })).toEqual({ type: "ignore", reason: "not_financial" });
+    // "debited … and credited to the payee" is money out.
+    const both = email({ from: "alerts@hdfcbank.net", body: "Rs 450.00 debited from a/c **1234 and credited to zomato@hdfcbank. UPI Ref 629412345678" });
+    expect(both.type === "transaction" && both.proposal).toMatchObject({ kind: "expense", amountPaise: 45000 });
+    expect(both.type === "transaction" && both.proposal.issues.map((i) => i.field)).not.toContain("kind");
   });
 });
 
