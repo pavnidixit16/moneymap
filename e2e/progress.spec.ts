@@ -20,19 +20,32 @@ function sql(query: string): string {
 }
 const count = (table: string, user: keyof typeof USERS) => Number(sql(`select count(*) from public.${table} where user_id = '${USERS[user].id}'`));
 
-// Counts requests for the celebration sound.
-function soundRequests(page: Page) {
-  const seen = { n: 0 };
-  page.on("request", (r) => {
-    if (r.url().endsWith("/sounds/milestone.wav")) seen.n += 1;
+// Behaves like iPhone Safari: no sound until the user has tapped the page (Playwright's own
+// scripting counts as user activation, so taps are tracked directly). Counts the unmuted
+// plays that were allowed.
+async function strictSound(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __plays: number };
+    w.__plays = 0;
+    let tapped = false;
+    document.addEventListener("pointerdown", () => (tapped = true), true);
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+      if (!tapped) return Promise.reject(new DOMException("Blocked", "NotAllowedError"));
+      const p = play.call(this);
+      p.then(() => {
+        if (!this.muted) w.__plays += 1;
+      }).catch(() => undefined);
+      return p;
+    };
   });
-  return seen;
+  return { plays: () => page.evaluate(() => (window as unknown as { __plays: number }).__plays) };
 }
 
 test.describe.configure({ mode: "serial" });
 
 test("a no-spend day: confirmed, saved once, no money recorded, celebrated once", async ({ page }) => {
-  const sound = soundRequests(page);
+  const sound = await strictSound(page);
   await signIn(page, "p");
   await open(page, "/progress");
   await expect(streak(page)).toHaveText("0 days");
@@ -53,7 +66,7 @@ test("a no-spend day: confirmed, saved once, no money recorded, celebrated once"
 
   // First check-in: Money Mindful, with the chime (it followed the user's tap).
   await expect(page.getByRole("status", { name: "New achievement" })).toContainText("Money Mindful");
-  await expect.poll(() => sound.n).toBeGreaterThan(0);
+  await expect.poll(sound.plays).toBeGreaterThan(0);
   await expect(streak(page)).toHaveText("1 day");
   await expect(panel(page)).toContainText("Checked in today: no-spend day");
   await expect(page.getByRole("listitem", { name: /Money Mindful: earned/ })).toBeVisible();
@@ -70,19 +83,22 @@ test("streaks come from saved history; milestones celebrate once; sound waits fo
   sql(`set session_replication_role = replica;
        insert into public.daily_checkins (user_id, local_date, kind)
        select '${USERS.q.id}', (now() at time zone 'Asia/Kolkata')::date - n, 'reviewed_activity' from generate_series(1, 6) n;`);
-  const sound = soundRequests(page);
+  const sound = await strictSound(page);
   await signIn(page, "q");
   await open(page, "/progress");
   await expect(streak(page)).toHaveText("6 days");
   await expect(text(page, /Check in today to keep your 6-day streak going/)).toBeVisible();
 
-  // Earned from history on load: shown, but no sound until the user asks.
+  // Earned from history on load: shown at once; the phone blocks sound until the first
+  // tap anywhere, which then plays it.
   const found = page.getByRole("status", { name: "New achievement" });
   await expect(found).toContainText("3-day streak");
   await page.waitForTimeout(500);
-  expect(sound.n).toBe(0);
-  await found.getByRole("button", { name: "Play sound" }).click();
-  await expect.poll(() => sound.n).toBeGreaterThan(0);
+  expect(await sound.plays()).toBe(0);
+  await page.getByRole("heading", { name: "Progress" }).click();
+  await expect.poll(sound.plays).toBe(1);
+  await found.getByRole("button", { name: "Replay" }).click();
+  await expect.poll(sound.plays).toBe(2);
 
   await open(page, "/progress");
   await expect(page.getByRole("status", { name: "New achievement" })).toHaveCount(0);
@@ -165,7 +181,7 @@ test("a failed save shows an error and a safe retry; a missing sound never block
 });
 
 test("sound can be switched off, and stays off", async ({ page }) => {
-  const sound = soundRequests(page);
+  const sound = await strictSound(page);
   await signIn(page, "t");
   await open(page, "/progress");
   const toggle = page.getByRole("switch", { name: /Celebration sounds/ });
@@ -179,7 +195,7 @@ test("sound can be switched off, and stays off", async ({ page }) => {
   await panel(page).getByRole("button", { name: "Yes, it's a no-spend day" }).click();
   await expect(page.getByRole("status", { name: "New achievement" })).toContainText("Money Mindful");
   await page.waitForTimeout(500);
-  expect(sound.n).toBe(0);
+  expect(await sound.plays()).toBe(0);
 });
 
 test("saving an entry counts as today's check-in, and other users see nothing of it", async ({ page }) => {

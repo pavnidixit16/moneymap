@@ -9,7 +9,7 @@ import { useHydrated } from "@/components/use-hydrated";
 import type { ISODate } from "@/lib/engine/dates";
 import type { AchievementKey, CheckinKind, CheckinStatus } from "@/lib/progress";
 import { checkIn, withdrawNoSpend, type CheckinResult } from "./actions";
-import { Celebration } from "./celebration";
+import { Celebration, primeSound } from "./celebration";
 
 type Step = "choose" | "confirm_no_spend" | "record" | "confirm_reviewed" | "confirm_withdraw";
 
@@ -54,6 +54,7 @@ export function CheckinPanel({
   );
 
   function submit(kind: CheckinKind) {
+    primeSound(); // during the tap, so a milestone chime may play after the save
     setError(null);
     startTransition(async () => {
       let r: CheckinResult;

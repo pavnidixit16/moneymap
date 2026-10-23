@@ -38,13 +38,46 @@ export function useSoundPreference(): [boolean, (on: boolean) => void] {
 
 type PlayResult = "played" | "blocked" | "unavailable";
 
-// A short chime, then (where the device offers it) a spoken line. Browsers only allow
-// sound after a tap, so a celebration found on page load offers a Play button instead.
+const SOUND_SRC = "/sounds/milestone.wav";
+let shared: HTMLAudioElement | null = null;
+let primed = false;
+function soundElement(): HTMLAudioElement {
+  shared ??= Object.assign(new Audio(SOUND_SRC), { preload: "auto" });
+  return shared;
+}
+
+// Phones only allow sound that starts during a tap. Saving a check-in takes a moment, so
+// the tap "warms up" one shared audio element (and the speech voice) silently; the
+// celebration then plays through it once the server has confirmed.
+export function primeSound() {
+  if (primed) return;
+  try {
+    const a = soundElement();
+    a.muted = true;
+    a.play()
+      .then(() => {
+        a.pause();
+        a.currentTime = 0;
+        a.muted = false;
+        primed = true;
+      })
+      .catch(() => {
+        a.muted = false;
+      });
+    if ("speechSynthesis" in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+  } catch {
+    // sound is optional
+  }
+}
+
+// A short chime, then (where the device offers it) a spoken line.
 async function playCelebration(voice?: string): Promise<PlayResult> {
   try {
-    const audio = new Audio("/sounds/milestone.wav");
-    audio.volume = 0.8;
-    await audio.play();
+    const a = soundElement();
+    a.muted = false;
+    a.currentTime = 0;
+    a.volume = 0.8;
+    await a.play();
   } catch (e) {
     return e instanceof DOMException && e.name === "NotAllowedError" ? "blocked" : "unavailable";
   }
@@ -79,8 +112,8 @@ export function SoundToggle() {
   );
 }
 
-// Shown once per newly earned achievement. `fromTap` means it follows the user's own tap,
-// so sound may play straight away; otherwise the user can play it.
+// Shown once per newly earned achievement. Sound plays straight away when the browser
+// allows it (after the user's tap), otherwise on the first tap anywhere, or via Play.
 export function Celebration({ keys, fromTap, onDone }: { keys: AchievementKey[]; fromTap: boolean; onDone: () => void }) {
   const [soundEnabled] = useSoundPreference();
   const [sound, setSound] = useState<PlayResult | "idle">("idle");
@@ -93,7 +126,18 @@ export function Celebration({ keys, fromTap, onDone }: { keys: AchievementKey[];
     started.current = true;
     // Mark first, so leaving or refreshing never shows this celebration again.
     markCelebrated(keys).catch(() => undefined);
-    if (fromTap && soundEnabled) playCelebration(voice).then(setSound);
+    if (!soundEnabled) return;
+    playCelebration(voice).then((result) => {
+      setSound(result);
+      // Opened without a tap (e.g. today was counted by saving an entry): the browser
+      // blocks sound until the user touches the page, so play on the first tap anywhere.
+      if (result !== "blocked") return;
+      const onTap = () => {
+        document.removeEventListener("pointerdown", onTap, true);
+        playCelebration(voice).then(setSound);
+      };
+      document.addEventListener("pointerdown", onTap, true);
+    });
   }, [keys, fromTap, soundEnabled, voice]);
 
   if (!items.length) return null;
