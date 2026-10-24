@@ -29,6 +29,8 @@ test("from Home: a comfortable purchase, with the numbers behind it", async ({ p
   await expect(estimate(page)).toContainText("₹45,000");
   await expect(estimate(page)).toContainText("₹39,000");
   await expect(estimate(page)).not.toContainText(SHAMING);
+  // The basis of the estimate is always visible, not hidden in a details section.
+  await expect(estimate(page).getByText(/^Based on what you've recorded in MoneyMap for this pay cycle \(1 \w+ – \d+ \w+\)\. Not your bank balance\.$/)).toBeVisible();
   expect(records("u")).toBe(before); // nothing saved
 });
 
@@ -76,6 +78,7 @@ test("short: calm wording, and the after-payday view with its own numbers", asyn
   await expect(e).toContainText("₹30,000"); // everyday budget
   await expect(e).toContainText("−₹25,000");
   await expect(e).toContainText("not a promise");
+  await expect(e.getByText(/^Based on the income, regular payments and budget recorded in MoneyMap, applied to the next pay cycle/)).toBeVisible();
 
   await page.getByLabel("How much is it? (₹)").fill("20000");
   await expect(e).toContainText("After payday, this looks manageable based on your recorded information.");

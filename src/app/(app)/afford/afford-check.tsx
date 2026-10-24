@@ -206,6 +206,14 @@ export function AffordCheck({ input, next }: { input: AffordInput; next: { items
           )}
 
           {level !== "incomplete" && (
+            <p className="text-xs text-muted">
+              {when === "now"
+                ? `Based on what you've recorded in MoneyMap for this pay cycle (${formatDate(o.cycle.start, false)} – ${formatDate(o.cycle.end, false)}). Not your bank balance.`
+                : `Based on the income, regular payments and budget recorded in MoneyMap, applied to the next pay cycle (${formatDate(later?.from ?? o.cycle.nextPayday, false)} – ${formatDate(later?.to ?? next.end, false)}). Not your bank balance.`}
+            </p>
+          )}
+
+          {level !== "incomplete" && (
             <details className="text-xs text-muted">
               <summary className="cursor-pointer font-medium">What this estimate doesn&apos;t know</summary>
               <ul className="mt-1 list-disc space-y-0.5 pl-4">
