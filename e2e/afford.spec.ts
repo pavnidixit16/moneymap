@@ -105,3 +105,19 @@ test("fits a 360px phone", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(0);
   if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/afford-360.png`, fullPage: true });
 });
+
+test("after payday: commitments already paid early are explained, never counted twice", async ({ page }) => {
+  // U pays next cycle's SIP today (early).
+  execFileSync("psql", ["-h", process.env.PGHOST!, "-p", process.env.PGPORT!, "-U", "postgres", "-d", "mm_e2e", "-v", "ON_ERROR_STOP=1", "-tAc", `
+    insert into public.commitment_payments (user_id, commitment_id, due_date, outcome, amount_paise, paid_on)
+    select c.user_id, c.id, (date_trunc('month', c.next_due_date) + interval '2 month - 1 day')::date, 'paid', 1000000, (now() at time zone 'Asia/Kolkata')::date
+    from public.commitments c where c.user_id = '${USERS.u.id}' and c.name = 'SIP';`]);
+  await signIn(page, "u");
+  await open(page, "/afford");
+  await page.getByLabel("How much is it? (₹)").fill("5000");
+  await page.getByRole("button", { name: /After payday/ }).click();
+  const e = estimate(page);
+  await expect(e).toContainText("₹10,000 of them already paid early this cycle");
+  await expect(e).toContainText("−₹25,000"); // only rent is still due that cycle
+  await expect(e).not.toContainText("−₹0");
+});

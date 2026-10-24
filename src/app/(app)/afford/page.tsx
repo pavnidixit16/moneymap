@@ -21,7 +21,14 @@ async function Loader() {
     const next = payCycle(profile.payday_day, cycle.nextPayday);
     data = {
       input: { overview, hasCommitments: commitments.some((c) => c.status === "active"), onboarded: Boolean(profile.onboarded_at) },
-      next: { items: dueItemsUntil(commitments, payments, today, next.end), end: next.end },
+      next: {
+        items: dueItemsUntil(commitments, payments, today, next.end),
+        end: next.end,
+        // Next cycle's dates already paid this cycle: shown so a ₹0 there makes sense.
+        paidEarlyPaise: payments
+          .filter((p) => p.outcome === "paid" && p.due_date >= cycle.nextPayday && p.due_date <= next.end)
+          .reduce((s, p) => s + p.amount_paise, 0),
+      },
     };
   } catch {
     return <ErrorNote>Couldn&apos;t load your estimate. Please refresh the page; nothing was changed.</ErrorNote>;

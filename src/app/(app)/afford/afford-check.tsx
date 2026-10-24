@@ -28,8 +28,9 @@ const TONE: Record<AffordLevel, { icon: typeof Info; box: string; iconClass: str
 };
 
 const signed = (p: number) => (p < 0 ? `−${formatINR(-p)}` : formatINR(p));
+const minus = (p: number) => (p === 0 ? formatINR(0) : `−${formatINR(p)}`);
 
-export function AffordCheck({ input, next }: { input: AffordInput; next: { items: DueItem[]; end: ISODate } }) {
+export function AffordCheck({ input, next }: { input: AffordInput; next: { items: DueItem[]; end: ISODate; paidEarlyPaise: number } }) {
   const [amount, setAmount] = useState("");
   const [label, setLabel] = useState("");
   const [when, setWhen] = useState<"now" | "after">("now");
@@ -134,12 +135,18 @@ export function AffordCheck({ input, next }: { input: AffordInput; next: { items
                     Take-home pay ({formatDate(later.from, false)} – {formatDate(later.to, false)})
                   </dt>
                   <dd className="text-right tabular-nums">{formatINR(later.incomePaise)}</dd>
-                  <dt className="text-muted">Bills, EMIs and SIPs due that cycle</dt>
-                  <dd className="text-right tabular-nums">−{formatINR(later.commitmentsPaise)}</dd>
+                  <dt className="text-muted">
+                    Bills, EMIs and SIPs due that cycle
+                    {next.paidEarlyPaise > 0 && <span className="block text-xs">{formatINR(next.paidEarlyPaise)} of them already paid early this cycle</span>}
+                    {later.commitmentsPaise === 0 && next.paidEarlyPaise === 0 && (
+                      <span className="block text-xs">{input.hasCommitments ? "Nothing due in that cycle" : "None recorded yet"}</span>
+                    )}
+                  </dt>
+                  <dd className="text-right tabular-nums">{minus(later.commitmentsPaise)}</dd>
                   {later.everydayPaise > 0 && (
                     <>
                       <dt className="text-muted">Your everyday spending budget</dt>
-                      <dd className="text-right tabular-nums">−{formatINR(later.everydayPaise)}</dd>
+                      <dd className="text-right tabular-nums">{minus(later.everydayPaise)}</dd>
                     </>
                   )}
                   {later.carryPaise < 0 && (
