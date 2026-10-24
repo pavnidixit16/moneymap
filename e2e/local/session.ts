@@ -16,6 +16,8 @@ export const USERS = {
   r: { id: "77777777-7777-4777-8777-777777777773", email: "progress-r@example.invalid" },
   s: { id: "77777777-7777-4777-8777-777777777774", email: "progress-s@example.invalid" },
   t: { id: "77777777-7777-4777-8777-777777777775", email: "progress-t@example.invalid" },
+  // Feedback admin (listed in app_admins by setup.sql).
+  h: { id: "88888888-8888-4888-8888-888888888888", email: "owner-h@example.invalid" },
 } as const;
 
 const b64url = (v: string | Buffer) => Buffer.from(v).toString("base64url");

@@ -194,3 +194,19 @@ Then **Deployments** → the latest one → **⋯ → Redeploy**, so it picks up
 
 Testing-mode limits: only listed test users can connect, Google shows the unverified
 warning, and access expires after about 7 days (the app then asks to reconnect).
+
+## Tester feedback (migration 8)
+
+1. Supabase → **SQL Editor** → **New query** → paste the whole of
+   `supabase/migrations/20261026000008_feedback.sql` → **Run**. Expect "Success. No rows
+   returned". Run it once only.
+2. Make yourself the only admin who can read feedback. New query, paste this with your own
+   Google address, then **Run**. Expect "Success. 1 rows affected", or "INSERT 0 1":
+   ```sql
+   insert into public.app_admins (user_id)
+   select id from auth.users where email = 'dixitpavni16@gmail.com';
+   ```
+3. **Check:** new query → paste the whole of `supabase/tests/rls_isolation.sql` → **Run** →
+   `ALL CHECKS PASSED`.
+4. In the app: Settings → **Share feedback** (everyone) and **See what testers said
+   (admins only)** (only you).

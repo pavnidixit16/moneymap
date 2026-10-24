@@ -1,9 +1,21 @@
 import { Suspense } from "react";
-import { Card, ErrorNote, PageHeader, Skeleton } from "@/components/ui";
-import { getProfile, listCommitments } from "@/lib/data";
+import { MessageSquareHeart } from "lucide-react";
+import Link from "next/link";
+import { ButtonLink, Card, ErrorNote, PageHeader, Skeleton } from "@/components/ui";
+import { getProfile, isAdmin, listCommitments } from "@/lib/data";
 import { paiseToInput } from "@/lib/money";
 import { SampleDataControls } from "./sample-data";
 import { SettingsForm } from "./settings-form";
+
+async function AdminLink() {
+  const admin = await isAdmin().catch(() => false);
+  if (!admin) return null;
+  return (
+    <Link href="/settings/feedback/results" className="text-sm font-semibold text-accent underline">
+      See what testers said (admins only)
+    </Link>
+  );
+}
 
 async function SampleSection() {
   let loaded = false;
@@ -63,6 +75,16 @@ export default function SettingsPage() {
       <Suspense fallback={<Skeleton className="h-28" />}>
         <SampleSection />
       </Suspense>
+      <Card className="flex flex-col gap-2">
+        <h2 className="font-semibold">Share feedback</h2>
+        <p className="text-sm text-muted">Five quick questions about your experience. Only the MoneyMap team sees your answers.</p>
+        <ButtonLink href="/settings/feedback" variant="soft">
+          <MessageSquareHeart className="size-4" aria-hidden /> Share feedback
+        </ButtonLink>
+        <Suspense fallback={null}>
+          <AdminLink />
+        </Suspense>
+      </Card>
       <Card className="flex flex-col gap-2 text-sm text-muted">
         <p>Amounts are in Indian rupees. Dates follow Indian time.</p>
         <form action="/auth/signout" method="post">

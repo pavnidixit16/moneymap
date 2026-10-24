@@ -17,5 +17,9 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('77777777-7777-4777-8777-777777777772', 'progress-q@example.invalid', '{"full_name":"Tester Q"}'),
   ('77777777-7777-4777-8777-777777777773', 'progress-r@example.invalid', '{"full_name":"Tester R"}'),
   ('77777777-7777-4777-8777-777777777774', 'progress-s@example.invalid', '{"full_name":"Tester S"}'),
-  ('77777777-7777-4777-8777-777777777775', 'progress-t@example.invalid', '{"full_name":"Tester T"}')
+  ('77777777-7777-4777-8777-777777777775', 'progress-t@example.invalid', '{"full_name":"Tester T"}'),
+  ('88888888-8888-4888-8888-888888888888', 'owner-h@example.invalid', '{"full_name":"Owner H"}')
 on conflict do nothing;
+
+-- The owner who may read all feedback (in production this row is added by hand).
+insert into public.app_admins (user_id) values ('88888888-8888-4888-8888-888888888888') on conflict do nothing;

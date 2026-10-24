@@ -122,3 +122,11 @@ export async function listRecentTransactions(limit = 5): Promise<TransactionRow[
   if (error) throw new Error("Couldn't load your recent transactions.");
   return data as TransactionRow[];
 }
+
+// Whether the signed-in user is listed in app_admins (added by the owner in the SQL Editor).
+// Row-level security lets a user see only their own admin row, so this can't reveal others.
+export async function isAdmin(): Promise<boolean> {
+  const { userId, supabase } = await requireUser();
+  const { data } = await supabase.from("app_admins").select("user_id").eq("user_id", userId).maybeSingle();
+  return Boolean(data);
+}

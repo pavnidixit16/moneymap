@@ -385,6 +385,47 @@ do $$ begin
 end $$;
 select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
 
+-- ---------------------------------------------------------------- migration 8 feedback (B, A, then admin A)
+-- B sends feedback; A (not an admin yet) cannot see it.
+do $$ begin
+  insert into public.feedback_responses (parts_tried, ease, issues, return_intent, comments)
+  values (array['dashboard', 'voice'], 'easy', array['none'], 'probably', 'Clear and calm.');
+  begin
+    insert into public.feedback_responses (ease, return_intent) values ('easy', 'probably');
+    raise exception 'FAIL: two feedback responses saved for one user';
+  exception when unique_violation then null; end;
+  begin
+    update public.feedback_responses set issues = array['bank_password'];
+    raise exception 'FAIL: unknown feedback option accepted';
+  exception when check_violation then null; end;
+  begin
+    insert into public.app_admins (user_id) values ('bbbbbbbb-0000-4000-8000-000000000002');
+    raise exception 'FAIL: a user made themselves an admin';
+  exception when insufficient_privilege then null; end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$ begin
+  if (select count(*) from public.feedback_responses) <> 0 then
+    raise exception 'FAIL: a non-admin can read other users'' feedback';
+  end if;
+  update public.feedback_responses set comments = 'tampered';
+end $$;
+reset role;
+insert into public.app_admins (user_id) values ('aaaaaaaa-0000-4000-8000-000000000001');
+set local role authenticated;
+do $$ begin
+  if (select count(*) from public.feedback_responses) <> 1
+     or (select comments from public.feedback_responses) <> 'Clear and calm.' then
+    raise exception 'FAIL: the admin cannot read feedback, or a non-owner changed it';
+  end if;
+  update public.feedback_responses set comments = 'admin edit';
+  if (select comments from public.feedback_responses) <> 'Clear and calm.' then
+    raise exception 'FAIL: an admin changed a tester''s feedback';
+  end if;
+  raise notice 'PASS: feedback is private to each tester and readable only by admins';
+end $$;
+select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-4000-8000-000000000002","role":"authenticated"}', true);
+
 -- ---------------------------------------------------------------- anonymous visitor
 reset role;
 set local role anon;
@@ -393,7 +434,7 @@ select set_config('request.jwt.claims', '', true);
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles', 'transactions', 'commitments', 'commitment_payments', 'gmail_connections', 'gmail_dismissed', 'daily_checkins', 'achievements'] loop
+  foreach t in array array['profiles', 'transactions', 'commitments', 'commitment_payments', 'gmail_connections', 'gmail_dismissed', 'daily_checkins', 'achievements', 'feedback_responses', 'app_admins'] loop
     begin
       execute format('select count(*) from public.%I', t);
       raise exception 'FAIL: anonymous visitor could query %', t;
