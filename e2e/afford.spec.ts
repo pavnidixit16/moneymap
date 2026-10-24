@@ -42,7 +42,7 @@ test("tight: explains why, counts each commitment once, and offers options witho
   const e = estimate(page);
   await expect(e).toContainText("This could make the rest of your month a little tighter. Want to explore your options?");
   await expect(e).toContainText("₹5,000"); // after it
-  await expect(e).toContainText("Everyday budget still planned");
+  await expect(e).toContainText("Breathing room (10% of this cycle's income)");
   await expect(e).toContainText("₹10,000");
   await expect(e).toContainText("Rent");
   await expect(e).toContainText("SIP");

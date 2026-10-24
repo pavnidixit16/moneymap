@@ -22,6 +22,7 @@ export const AFTER_MESSAGES: Record<Exclude<AffordLevel, "incomplete">, string> 
 };
 export const INCOMPLETE_MESSAGE = "We need a little more information before we can estimate this.";
 export const NOT_NOW = "Not now doesn't mean never.";
+export const CUSHION_SHARE = 0.1;
 
 export interface AffordInput {
   overview: Overview;
@@ -35,8 +36,7 @@ export interface Assessment {
   amountPaise: Paise;
   beforePaise: Paise; // today's estimate (R8)
   afterPaise: Paise; // after this purchase
-  cushionPaise: Paise; // what "comfortable" leaves room for: remaining budget, or 10% of income
-  cushionReason: "budget" | "income_share";
+  cushionPaise: Paise; // breathing room: 10% of this cycle's income; less than this left is "tight"
   reasons: DueItem[]; // counted commitments still due before payday, largest first
   limitations: string[];
 }
@@ -57,12 +57,10 @@ function limitationsOf({ overview: o, hasCommitments }: AffordInput): string[] {
 export function assessPurchase(input: AffordInput, amountPaise: Paise): Assessment {
   const o = input.overview;
   const reasons = [...counted(o.dueItems)].sort((a, b) => b.amountPaise - a.amountPaise).slice(0, 4);
-  const cushionReason = o.budgetPaise > 0 ? "budget" : "income_share";
-  // Room the user has planned for everyday spending until payday; without a budget, keep a
-  // modest share of this cycle's income as breathing room.
-  const cushionPaise = cushionReason === "budget" ? Math.max(0, o.budgetLeftPaise) : Math.round(o.incomePaise * 0.1);
+  // Breathing room: less than 10% of this cycle's income left counts as "tight".
+  const cushionPaise = Math.round(o.incomePaise * CUSHION_SHARE);
   const afterPaise = o.remainingPaise - amountPaise;
-  const base = { amountPaise, beforePaise: o.remainingPaise, afterPaise, cushionPaise, cushionReason, reasons, limitations: limitationsOf(input) } as const;
+  const base = { amountPaise, beforePaise: o.remainingPaise, afterPaise, cushionPaise, reasons, limitations: limitationsOf(input) } as const;
 
   // Without income we can't say anything confident.
   if (!input.onboarded || o.incomeBasePaise <= 0) return { ...base, level: "incomplete", message: INCOMPLETE_MESSAGE };
@@ -95,7 +93,7 @@ export function assessAfterPayday(input: AffordInput, next: { items: DueItem[]; 
   const carryPaise = Math.min(0, o.remainingPaise);
   const remaining = o.incomeBasePaise - commitmentsPaise - everydayPaise + carryPaise;
   const afterPaise = remaining - amountPaise;
-  const cushion = everydayPaise > 0 ? 0 : Math.round(o.incomeBasePaise * 0.1);
+  const cushion = Math.round(o.incomeBasePaise * CUSHION_SHARE);
   return {
     from,
     to: next.end,

@@ -29,7 +29,8 @@ function setup(p = profile(), commitments = [rent, sip, card], transactions = [s
 }
 
 describe("Can I afford this?", () => {
-  // Estimate today: 1,00,000 − 20,000 − 25,000 − 10,000 = ₹45,000. Budget left ₹10,000.
+  // Estimate today: 1,00,000 − 20,000 − 25,000 − 10,000 = ₹45,000. Breathing room: 10% of
+  // income = ₹10,000.
   it("uses the Home estimate, counting each commitment once and never reminder-only cards", () => {
     const { overview, input } = setup();
     expect(overview.remainingPaise).toBe(r(45000));
@@ -41,13 +42,20 @@ describe("Can I afford this?", () => {
 
   it("comfortable: plenty left after the planned everyday budget", () => {
     const a = assessPurchase(setup().input, r(6000));
-    expect(a).toMatchObject({ level: "comfortable", message: MESSAGES.comfortable, cushionPaise: r(10000), cushionReason: "budget" });
+    expect(a).toMatchObject({ level: "comfortable", message: MESSAGES.comfortable, cushionPaise: r(10000) });
   });
 
-  it("tight: still positive, but eats into the everyday budget", () => {
+  it("tight: less than 10% of income left; exactly 10% is still manageable", () => {
     const a = assessPurchase(setup().input, r(40000));
     expect(a.afterPaise).toBe(r(5000));
     expect(a).toMatchObject({ level: "tight", message: MESSAGES.tight });
+    expect(assessPurchase(setup().input, r(35000)).level).toBe("comfortable"); // ₹10,000 left
+    expect(assessPurchase(setup().input, r(35001)).level).toBe("tight");
+  });
+
+  it("extra income recorded this cycle raises the breathing room with it", () => {
+    const withBonus = setup(profile(), [rent, sip, card], [spent(20000), { id: "bonus", kind: "income", amount_paise: r(20000), category: "income", occurred_on: "2026-10-05" }]);
+    expect(assessPurchase(withBonus.input, r(1000)).cushionPaise).toBe(r(12000));
   });
 
   it("short: below zero before payday", () => {
@@ -55,9 +63,9 @@ describe("Can I afford this?", () => {
     expect(a).toMatchObject({ level: "short", afterPaise: r(-15000), message: MESSAGES.short });
   });
 
-  it("without a budget, keeps 10% of income as breathing room and says so", () => {
+  it("uses the same 10% rule without a budget, and says the budget is missing", () => {
     const a = assessPurchase(setup(profile({ cycle_budget_paise: 0 })).input, r(40000));
-    expect(a).toMatchObject({ cushionReason: "income_share", cushionPaise: r(10000), level: "tight" });
+    expect(a).toMatchObject({ cushionPaise: r(10000), level: "tight" });
     expect(a.limitations.join(" ")).toMatch(/No spending budget is set/);
   });
 
@@ -78,7 +86,9 @@ describe("Can I afford this?", () => {
     const later = assessAfterPayday(input, next, r(60000))!;
     // Next cycle: 1,00,000 − rent 25,000 − SIP 10,000 − budget 30,000 = 35,000 → −25,000.
     expect(later).toMatchObject({ from: "2026-11-01", to: "2026-11-30", commitmentsPaise: r(35000), everydayPaise: r(30000), carryPaise: 0, afterPaise: r(-25000), level: "short" });
+    // 35,000 − 20,000 = 15,000 left ≥ 10,000 (10%): manageable; 30,000 → 5,000 left: tight.
     expect(assessAfterPayday(input, next, r(20000))!.level).toBe("comfortable");
+    expect(assessAfterPayday(input, next, r(30000))!.level).toBe("tight");
     // A shortfall this cycle carries into the next; a surplus doesn't (it may be spent).
     const tightNow = setup(profile(), [rent, sip, card], [spent(80000)]);
     expect(assessAfterPayday(tightNow.input, tightNow.next, r(1000))!.carryPaise).toBe(r(-15000));

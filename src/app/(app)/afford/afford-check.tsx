@@ -104,7 +104,7 @@ export function AffordCheck({ input, next }: { input: AffordInput; next: { items
                 <dd className="text-right font-semibold tabular-nums">{signed(now.afterPaise)}</dd>
                 {now.level !== "comfortable" && now.cushionPaise > 0 && (
                   <>
-                    <dt className="text-muted">{now.cushionReason === "budget" ? "Everyday budget still planned" : "Breathing room (10% of income)"}</dt>
+                    <dt className="text-muted">Breathing room (10% of this cycle&apos;s income)</dt>
                     <dd className="text-right tabular-nums">{formatINR(now.cushionPaise)}</dd>
                   </>
                 )}
