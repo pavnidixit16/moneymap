@@ -7,8 +7,8 @@ import { usePathname } from "next/navigation";
 // Five tabs fit a 360px phone. Subscriptions are commitments, so their page (reached from
 // Home and Commitments) highlights the Commitments tab.
 const TABS = [
-  { href: "/overview", label: "Home", icon: House, also: [] as string[] },
-  { href: "/commitments", label: "Commitments", icon: CalendarClock, also: ["/subscriptions"] },
+  { href: "/overview", label: "Home", icon: House, also: ["/afford"] },
+  { href: "/commitments", label: "Commitments", icon: CalendarClock, also: ["/subscriptions"] as string[] },
   { href: "/spending", label: "Spending", icon: ChartPie, also: [] },
   { href: "/progress", label: "Progress", icon: Flame, also: [] },
   { href: "/settings", label: "Settings", icon: Settings, also: [] },

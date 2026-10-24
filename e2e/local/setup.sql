@@ -23,3 +23,21 @@ on conflict do nothing;
 
 -- The owner who may read all feedback (in production this row is added by hand).
 insert into public.app_admins (user_id) values ('88888888-8888-4888-8888-888888888888') on conflict do nothing;
+
+-- "Can I afford this?" tests. U: payday on the 1st, ₹1,00,000 take-home, ₹30,000 budget,
+-- ₹20,000 spent today, rent ₹25,000 and SIP ₹10,000 due at month end, and a card bill in
+-- reminder mode (never counted). Estimate: 1,00,000 − 20,000 − 25,000 − 10,000 = ₹45,000.
+-- V: signed up but no income yet.
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('99999999-9999-4999-8999-999999999991', 'afford-u@example.invalid', '{"full_name":"Tester U"}'),
+  ('99999999-9999-4999-8999-999999999992', 'afford-v@example.invalid', '{"full_name":"Tester V"}')
+on conflict do nothing;
+update public.profiles set monthly_income_paise = 10000000, cycle_budget_paise = 3000000, payday_day = 1, onboarded_at = now()
+ where id = '99999999-9999-4999-8999-999999999991';
+update public.profiles set onboarded_at = now() where id = '99999999-9999-4999-8999-999999999992';
+with d as (select (date_trunc('month', (now() at time zone 'Asia/Kolkata')) + interval '1 month - 1 day')::date as month_end)
+insert into public.commitments (user_id, name, kind, subtype, tracking_mode, amount_paise, frequency, anchor_day, next_due_date)
+select '99999999-9999-4999-8999-999999999991', x.name, x.kind, x.subtype, x.mode, x.amount, 'monthly', extract(day from d.month_end)::int, d.month_end
+from d, (values ('Rent', 'bill', 'rent', 'outflow', 2500000), ('SIP', 'investment', 'sip', 'outflow', 1000000), ('HDFC card', 'credit_card', 'credit_card', 'reminder', 1800000)) as x(name, kind, subtype, mode, amount);
+insert into public.transactions (user_id, kind, amount_paise, category, occurred_on)
+values ('99999999-9999-4999-8999-999999999991', 'expense', 2000000, 'shopping', (now() at time zone 'Asia/Kolkata')::date);

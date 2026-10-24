@@ -167,6 +167,15 @@ async function Dashboard() {
         <Breakdown o={o} />
       </section>
 
+      <Link href="/afford" className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 text-sm">
+        <IconBubble name="wallet" />
+        <span className="flex flex-col">
+          <span className="font-semibold">Can I afford this?</span>
+          <span className="text-muted">Try a purchase against your plan before you buy. Nothing is saved.</span>
+        </span>
+        <ChevronRight className="ml-auto size-4 shrink-0 text-muted" aria-hidden />
+      </Link>
+
       {o.overdueCount > 0 && (
         <Link href="/commitments?tab=upcoming" className="flex items-center gap-3 rounded-2xl border border-danger/40 bg-surface p-3 text-sm">
           <TriangleAlert className="size-5 shrink-0 text-danger" aria-hidden />
