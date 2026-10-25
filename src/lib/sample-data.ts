@@ -61,3 +61,16 @@ export function sampleRows(today: ISODate, paydayDay: number) {
 
   return { commitments, transactions };
 }
+
+// The sample month goes out of date as days pass: its bills fall overdue and its spending
+// drops into an earlier pay cycle. Then a demo account should reload it for today.
+export function sampleIsStale(
+  commitments: { is_sample: boolean; status: string; tracking_mode: string; next_due_date: ISODate | null }[],
+  cycleTransactions: { is_sample: boolean }[],
+  today: ISODate,
+): boolean {
+  const sample = commitments.filter((c) => c.is_sample);
+  if (sample.length === 0) return false;
+  const overdue = sample.some((c) => c.status === "active" && c.tracking_mode !== "info" && c.next_due_date !== null && c.next_due_date < today);
+  return overdue || !cycleTransactions.some((t) => t.is_sample);
+}

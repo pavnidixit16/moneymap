@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useHydrated } from "@/components/use-hydrated";
-import { loadSampleData } from "../settings/actions";
+import { loadSampleData, refreshSampleData } from "../settings/actions";
 
 // Loads the existing sample records (all marked Sample) so a first-time visitor sees a
 // full dashboard before entering anything. Their own settings are never changed.
@@ -41,6 +41,28 @@ export function ExploreSampleButton() {
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+// Shown instead of the dashboard when a demo account's sample month is out of date: reloads
+// it for today, then shows the dashboard. Only sample rows change.
+export function SampleRefresher() {
+  const router = useRouter();
+  const started = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    refreshSampleData()
+      .then((r) => (r.error ? setError(r.error) : router.refresh()))
+      .catch(() => setError("Couldn't reach MoneyMap. Please refresh the page."));
+  }, [router]);
+
+  return (
+    <div role="status" className="rounded-2xl border border-accent/30 bg-accent-soft p-4 text-sm">
+      {error ?? "Updating the sample month to today’s dates…"}
     </div>
   );
 }

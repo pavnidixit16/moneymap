@@ -60,6 +60,23 @@ export async function loadSampleData(): Promise<SampleState> {
   return { message: "Sample data loaded. Items are marked Sample; clear them here any time." };
 }
 
+// Demo accounts only (never set up): replaces an out-of-date sample month with one dated
+// from today. Only sample rows are touched; an account with its own settings is refused.
+export async function refreshSampleData(): Promise<SampleState> {
+  const { userId, supabase } = await requireUser();
+  const { data: profile } = await supabase.from("profiles").select("payday_day, onboarded_at").eq("id", userId).single();
+  if (!profile || profile.onboarded_at) return { error: "Sample dates are only refreshed in demo mode." };
+  const a = await supabase.from("commitments").delete().eq("is_sample", true);
+  const b = await supabase.from("transactions").delete().eq("is_sample", true);
+  if (a.error || b.error) return { error: "Couldn't update the sample month. Please refresh the page." };
+  const { commitments, transactions } = sampleRows(istToday(), profile.payday_day);
+  const c = await supabase.from("commitments").insert(commitments);
+  const t = c.error ? c : await supabase.from("transactions").insert(transactions);
+  if (c.error || t.error) return { error: "Couldn't update the sample month. Please refresh the page." };
+  dataChanged();
+  return { message: "Sample month updated to today's dates." };
+}
+
 export async function clearSampleData(): Promise<SampleState> {
   const { supabase } = await requireUser();
   const a = await supabase.from("commitments").delete().eq("is_sample", true);

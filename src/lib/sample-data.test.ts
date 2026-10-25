@@ -1,10 +1,11 @@
 // The sample month shown to first-time visitors and judges, run through the real engine
 // (the same computeOverview the dashboard uses). Nothing on screen is hardcoded.
 import { describe, expect, it } from "vitest";
-import type { ISODate } from "./engine/dates";
+import { payCycle } from "./engine/cycle";
+import { addDays, type ISODate } from "./engine/dates";
 import { computeOverview } from "./engine/overview";
 import type { Commitment, Transaction } from "./engine/types";
-import { previewProfile, sampleRows, SAMPLE_PAY } from "./sample-data";
+import { previewProfile, sampleIsStale, sampleRows, SAMPLE_PAY } from "./sample-data";
 
 const r = (rupees: number) => rupees * 100;
 
@@ -70,5 +71,36 @@ describe("sample demo month is computed, not fixed", () => {
     const { rows } = sampleOverview("2026-10-25" as ISODate);
     expect(rows.commitments.every((c) => c.is_sample)).toBe(true);
     expect(rows.transactions.every((t) => t.is_sample && t.source === "sample")).toBe(true);
+  });
+});
+
+describe("keeping the demo month current", () => {
+  const stored = (today: ISODate, payday = 1) => {
+    const rows = sampleRows(today, payday);
+    return { commitments: rows.commitments.map((c) => ({ ...c, status: "active" })), transactions: rows.transactions };
+  };
+  const inCycle = (transactions: { occurred_on: string; is_sample: boolean }[], today: ISODate, payday: number) => {
+    const c = payCycle(payday, today);
+    return transactions.filter((t) => t.occurred_on >= c.start && t.occurred_on <= c.end);
+  };
+
+  it("a sample loaded on 25 Oct is current that day, and out of date 10 days later", () => {
+    const s = stored("2026-10-25" as ISODate);
+    expect(sampleIsStale(s.commitments, inCycle(s.transactions, "2026-10-25" as ISODate, 1), "2026-10-25" as ISODate)).toBe(false);
+    expect(sampleIsStale(s.commitments, inCycle(s.transactions, "2026-11-04" as ISODate, 1), "2026-11-04" as ISODate)).toBe(true);
+  });
+
+  it("a freshly loaded sample is never out of date, on any day and payday (so it can't reload in a loop)", () => {
+    for (let i = 0; i < 400; i++) {
+      const today = addDays("2026-10-01" as ISODate, i);
+      for (const payday of [1, 5, 15, 28, 31]) {
+        const s = stored(today, payday);
+        expect(sampleIsStale(s.commitments, inCycle(s.transactions, today, payday), today), `${today} payday ${payday}`).toBe(false);
+      }
+    }
+  });
+
+  it("an account without sample data is never touched", () => {
+    expect(sampleIsStale([{ is_sample: false, status: "active", tracking_mode: "outflow", next_due_date: "2020-01-01" as ISODate }], [], "2026-11-04" as ISODate)).toBe(false);
   });
 });

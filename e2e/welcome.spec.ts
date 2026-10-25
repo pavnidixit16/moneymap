@@ -115,3 +115,26 @@ test("demo dashboard at iPhone width: greeting, banner and figures", async ({ pa
     await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/demo-390-breakdown.png`, fullPage: true });
   }
 });
+
+test("a demo account's sample month stays current: aged 15 days, it reloads with today's dates", async ({ page }) => {
+  // W explored in the previous test. Pretend that was 15 days ago (dates only, as superuser).
+  sql(`update public.commitments set next_due_date = next_due_date - 15 where user_id = '${USERS.w.id}' and is_sample and next_due_date is not null;
+       update public.transactions set occurred_on = occurred_on - 15 where user_id = '${USERS.w.id}' and is_sample;`);
+  const overdueBefore = sql(`select count(*) from public.commitments where user_id = '${USERS.w.id}' and is_sample and tracking_mode <> 'info' and next_due_date < (now() at time zone 'Asia/Kolkata')::date`);
+  expect(Number(overdueBefore)).toBeGreaterThan(0);
+
+  await signIn(page);
+  await open(page, "/overview");
+  await expect(page.getByText("Welcome to your MoneyMap demo")).toBeVisible();
+  await expect(page.getByRole("note")).toContainText("You're exploring with sample data.");
+  await expect(page.getByText(/missed|overdue/i)).toHaveCount(0);
+  expect(sql(`select count(*) from public.commitments where user_id = '${USERS.w.id}' and is_sample and tracking_mode <> 'info' and next_due_date < (now() at time zone 'Asia/Kolkata')::date`)).toBe("0");
+  expect(sql(`select count(*) from public.commitments where user_id = '${USERS.w.id}' and is_sample`)).toBe("11");
+  expect(profile()).toBe("0/0/none");
+
+  // Already current: a second visit changes nothing.
+  const ids = sql(`select string_agg(id::text, ',' order by id) from public.commitments where user_id = '${USERS.w.id}'`);
+  await open(page, "/overview");
+  await expect(page.getByText("Welcome to your MoneyMap demo")).toBeVisible();
+  expect(sql(`select string_agg(id::text, ',' order by id) from public.commitments where user_id = '${USERS.w.id}'`)).toBe(ids);
+});

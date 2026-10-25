@@ -17,8 +17,8 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { BudgetProgress, CategoryBars } from "@/components/charts";
-import { previewProfile, SAMPLE_PAY } from "@/lib/sample-data";
-import { ExploreSampleButton } from "./explore-sample";
+import { previewProfile, SAMPLE_PAY, sampleIsStale } from "@/lib/sample-data";
+import { ExploreSampleButton, SampleRefresher } from "./explore-sample";
 import { commitmentIconName, IconBubble } from "@/components/icons";
 import { Badge, ButtonLink, Card, ErrorNote, SectionTitle, Skeleton } from "@/components/ui";
 import {
@@ -136,6 +136,9 @@ async function Dashboard() {
   // Exploring with sample data before setting up: example pay and budget on screen only.
   const sampleLoaded = commitments.some((c) => c.is_sample) || cycleTransactions.some((t) => t.is_sample);
   const { profile: shown, preview } = previewProfile(profile, sampleLoaded);
+  // Demo accounts: an out-of-date sample month (bills overdue, spending in an earlier cycle)
+  // is reloaded with today's dates before it is shown.
+  if (preview && sampleIsStale(commitments, cycleTransactions, istToday())) return <SampleRefresher />;
   if (!shown.onboarded_at) return <Welcome name={profile.display_name} />;
   profile = shown;
 
