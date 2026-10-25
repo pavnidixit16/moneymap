@@ -21,7 +21,7 @@ const CATEGORY_KEYWORDS: [string, RegExp][] = [
   ["transport", /\b(uber|ola|rapido|cab|taxi|auto|rickshaw|metro|bus|petrol|diesel|fuel|parking|toll|fastag)\b/],
   ["travel", /\b(flight|hotel|irctc|train ticket|train|makemytrip|goibibo|airbnb|trip|holiday|indigo|air india)\b/],
   ["shopping", /\b(amazon|flipkart|myntra|ajio|nykaa|meesho|shopping|clothes|shoes|shirt|dress|electronics|gadget|bed ?sheets?|pillows?|curtains?|towels?|furniture|utensils|home decor|decor|appliances?)\b/],
-  ["entertainment", /\b(movie|movies|cinema|bookmyshow|pvr|inox|concert|game|gaming|party)\b/],
+  ["entertainment", /\b(movie|movies|cinema|bookmyshow|pvr|inox|concert|game|gaming|party|netflix|spotify|hotstar|jiohotstar|prime video|zee5|sonyliv|youtube premium)\b/],
   ["healthcare", /\b(pharmacy|medicine|medicines|doctor|hospital|clinic|apollo|1mg|pharmeasy|netmeds|lab test|dentist)\b/],
   ["personal_care", /\b(salon|haircut|spa|parlour|parlor|grooming)\b/],
   ["education", /\b(course|books?|tuition|udemy|coursera|exam fee|school fee|college fee)\b/],

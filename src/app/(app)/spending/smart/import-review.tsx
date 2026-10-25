@@ -67,6 +67,16 @@ export function ImportReview() {
         />
       </label>
 
+      <p className="text-xs text-muted">
+        No statement handy? Download a made-up sample, then choose it above:{" "}
+        <a href="/samples/moneymap-sample-bank-statement.csv" download className="font-semibold text-accent underline">
+          bank statement
+        </a>{" "}
+        ·{" "}
+        <a href="/samples/moneymap-sample-card-statement.csv" download className="font-semibold text-accent underline">
+          card statement
+        </a>
+      </p>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       {message && <SuccessNote>{message}</SuccessNote>}
 
