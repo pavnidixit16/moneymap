@@ -21,6 +21,7 @@ export const USERS = {
   // "Can I afford this?" (seeded by setup.sql): u has a full plan, v has no income yet.
   u: { id: "99999999-9999-4999-8999-999999999991", email: "afford-u@example.invalid" },
   v: { id: "99999999-9999-4999-8999-999999999992", email: "afford-v@example.invalid" },
+  w: { id: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaa1", email: "welcome-w@example.invalid" },
 } as const;
 
 const b64url = (v: string | Buffer) => Buffer.from(v).toString("base64url");

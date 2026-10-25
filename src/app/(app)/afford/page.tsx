@@ -6,16 +6,22 @@ import { getProfile, listCommitments, listPayments, listTransactions } from "@/l
 import { payCycle } from "@/lib/engine/cycle";
 import { istToday } from "@/lib/engine/dates";
 import { computeOverview, dueItemsUntil } from "@/lib/engine/overview";
+import { formatINR } from "@/lib/money";
+import { previewProfile, SAMPLE_PAY } from "@/lib/sample-data";
 import { AffordCheck } from "./afford-check";
 
 async function Loader() {
   await connection();
   let data;
+  let preview = false;
   try {
-    const profile = await getProfile();
+    const real = await getProfile();
     const today = istToday();
-    const cycle = payCycle(profile.payday_day, today);
+    const cycle = payCycle(real.payday_day, today);
     const [commitments, payments, transactions] = await Promise.all([listCommitments(), listPayments(), listTransactions(cycle.start, cycle.end)]);
+    // Exploring with sample data before setting up: example pay and budget, on screen only.
+    const { profile, preview: inPreview } = previewProfile(real, commitments.some((c) => c.is_sample));
+    preview = inPreview;
     const overview = computeOverview({ profile, transactions, commitments, payments, today });
     // The next pay cycle's due items, for "what if I buy it after payday?".
     const next = payCycle(profile.payday_day, cycle.nextPayday);
@@ -33,7 +39,17 @@ async function Loader() {
   } catch {
     return <ErrorNote>Couldn&apos;t load your estimate. Please refresh the page; nothing was changed.</ErrorNote>;
   }
-  return <AffordCheck input={data.input} next={data.next} />;
+  return (
+    <>
+      {preview && (
+        <p role="note" className="rounded-2xl border border-accent/30 bg-accent-soft p-3 text-sm">
+          You&apos;re exploring with sample data, using example pay ({formatINR(SAMPLE_PAY.monthly_income_paise)}) and budget (
+          {formatINR(SAMPLE_PAY.cycle_budget_paise)}).
+        </p>
+      )}
+      <AffordCheck input={data.input} next={data.next} />
+    </>
+  );
 }
 
 export default function AffordPage() {

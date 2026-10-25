@@ -6,6 +6,18 @@ import { addDays, maxDate, type ISODate } from "./engine/dates";
 
 const r = (rupees: number) => rupees * 100;
 
+// Example pay and budget, shown (never saved) while someone explores with sample data
+// before entering their own. Their real settings stay untouched.
+export const SAMPLE_PAY = { monthly_income_paise: r(100000), cycle_budget_paise: r(35000) };
+
+export function previewProfile<P extends { onboarded_at: string | null; monthly_income_paise: number; cycle_budget_paise: number }>(
+  profile: P,
+  sampleLoaded: boolean,
+): { profile: P; preview: boolean } {
+  if (profile.onboarded_at || !sampleLoaded) return { profile, preview: false };
+  return { profile: { ...profile, ...SAMPLE_PAY, onboarded_at: "sample-preview" }, preview: true };
+}
+
 export function sampleRows(today: ISODate, paydayDay: number) {
   const cycle = payCycle(paydayDay, today);
   // A due date inside the current cycle, never before today.

@@ -41,3 +41,8 @@ select '99999999-9999-4999-8999-999999999991', x.name, x.kind, x.subtype, x.mode
 from d, (values ('Rent', 'bill', 'rent', 'outflow', 2500000), ('SIP', 'investment', 'sip', 'outflow', 1000000), ('HDFC card', 'credit_card', 'credit_card', 'reminder', 1800000)) as x(name, kind, subtype, mode, amount);
 insert into public.transactions (user_id, kind, amount_paise, category, occurred_on)
 values ('99999999-9999-4999-8999-999999999991', 'expense', 2000000, 'shopping', (now() at time zone 'Asia/Kolkata')::date);
+
+-- First-time visitor for the welcome / explore-with-sample-data test.
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaa1', 'welcome-w@example.invalid', '{"full_name":"Wren Tester"}')
+on conflict do nothing;

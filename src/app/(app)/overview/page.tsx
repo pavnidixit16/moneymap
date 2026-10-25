@@ -17,6 +17,8 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { BudgetProgress, CategoryBars } from "@/components/charts";
+import { previewProfile, SAMPLE_PAY } from "@/lib/sample-data";
+import { ExploreSampleButton } from "./explore-sample";
 import { commitmentIconName, IconBubble } from "@/components/icons";
 import { Badge, ButtonLink, Card, ErrorNote, SectionTitle, Skeleton } from "@/components/ui";
 import {
@@ -131,7 +133,10 @@ async function Dashboard() {
   if (failed || !profile || !commitments || !payments || !cycleTransactions || !recent) {
     return <ErrorNote>Couldn&apos;t load your dashboard. Please refresh the page; your data is safe.</ErrorNote>;
   }
-  if (!profile.onboarded_at) return <Welcome name={profile.display_name} />;
+  // Exploring with sample data before setting up: example pay and budget on screen only.
+  const { profile: shown, preview } = previewProfile(profile, commitments.some((c) => c.is_sample));
+  if (!shown.onboarded_at) return <Welcome name={profile.display_name} />;
+  profile = shown;
 
   const today = istToday();
   const o = computeOverview({ profile, transactions: cycleTransactions, commitments, payments, today });
@@ -143,6 +148,7 @@ async function Dashboard() {
 
   return (
     <>
+      {preview && <SamplePreviewNote />}
       <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-hero-from to-hero-to p-5 text-white shadow-lg">
         <div className="flex items-center justify-between text-sm text-white/85">
           <span>{firstName ? `Hi, ${firstName}` : "Hi there"}</span>
@@ -328,20 +334,70 @@ async function Dashboard() {
   );
 }
 
+function SamplePreviewNote() {
+  return (
+    <div role="note" className="flex flex-col gap-2 rounded-2xl border border-accent/30 bg-accent-soft p-3 text-sm">
+      <p>
+        <strong>You&apos;re exploring with sample data.</strong> Pay ({formatINR(SAMPLE_PAY.monthly_income_paise)}) and
+        budget ({formatINR(SAMPLE_PAY.cycle_budget_paise)}) are examples; items are marked Sample.
+      </p>
+      <p className="flex flex-wrap gap-x-4 gap-y-1">
+        <Link href="/settings" className="font-semibold text-accent underline">
+          Set up with my own numbers
+        </Link>
+        <Link href="/settings" className="font-semibold text-muted underline">
+          Clear sample data (Settings)
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+const HOW_IT_WORKS = [
+  { title: "Your pay and payday", text: "So MoneyMap knows what comes in and when." },
+  { title: "Your regular payments", text: "Rent, EMIs, SIPs, cards and subscriptions: what's already committed." },
+  { title: "Log spending your way", text: "Type, speak, upload a statement or check Gmail. You confirm every entry." },
+];
+
 function Welcome({ name }: { name: string | null }) {
   return (
-    <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-hero-from to-hero-to p-5 text-white shadow-lg">
-      <p className="text-2xl font-bold">Welcome{name ? `, ${friendlyFirstName(name)}` : ""}</p>
-      <p className="text-sm text-white/90">
-        See what&apos;s already committed, what&apos;s due next and roughly how much remains until payday. Start with your
-        take-home pay, payday and spending budget. It takes under a minute.
-      </p>
-      <div>
-        <Link href="/settings" className="inline-flex h-11 items-center rounded-full bg-white px-5 font-semibold text-hero-from">
-          Set up MoneyMap
-        </Link>
-      </div>
-    </section>
+    <>
+      <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-hero-from to-hero-to p-5 text-white shadow-lg">
+        <p className="text-2xl font-bold">Welcome{name ? `, ${friendlyFirstName(name)}` : ""}</p>
+        <p className="text-sm text-white/90">
+          See what&apos;s already committed, what&apos;s due next and roughly how much remains until payday. Start with your
+          take-home pay, payday and spending budget. It takes under a minute.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/settings" className="inline-flex h-11 items-center rounded-full bg-white px-5 font-semibold text-hero-from">
+            Set up MoneyMap
+          </Link>
+          <ExploreSampleButton />
+        </div>
+      </section>
+      <section aria-labelledby="how-title" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+        <h2 id="how-title" className="font-semibold">
+          How it works
+        </h2>
+        <ol className="flex flex-col gap-3">
+          {HOW_IT_WORKS.map((step, i) => (
+            <li key={step.title} className="flex gap-3">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent" aria-hidden>
+                {i + 1}
+              </span>
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold">{step.title}</span>
+                <span className="text-sm text-muted">{step.text}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="text-xs text-muted">
+          Then Home shows the estimated amount remaining until payday. It&apos;s an estimate from what you record, not your bank
+          balance. MoneyMap never asks for bank passwords, PINs or OTPs.
+        </p>
+      </section>
+    </>
   );
 }
 
