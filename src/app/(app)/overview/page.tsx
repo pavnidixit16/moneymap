@@ -134,7 +134,8 @@ async function Dashboard() {
     return <ErrorNote>Couldn&apos;t load your dashboard. Please refresh the page; your data is safe.</ErrorNote>;
   }
   // Exploring with sample data before setting up: example pay and budget on screen only.
-  const { profile: shown, preview } = previewProfile(profile, commitments.some((c) => c.is_sample));
+  const sampleLoaded = commitments.some((c) => c.is_sample) || cycleTransactions.some((t) => t.is_sample);
+  const { profile: shown, preview } = previewProfile(profile, sampleLoaded);
   if (!shown.onboarded_at) return <Welcome name={profile.display_name} />;
   profile = shown;
 
@@ -148,10 +149,10 @@ async function Dashboard() {
 
   return (
     <>
-      {preview && <SamplePreviewNote />}
+      {preview ? <SamplePreviewNote /> : sampleLoaded && <SampleMixedNote />}
       <section className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-hero-from to-hero-to p-5 text-white shadow-lg">
         <div className="flex items-center justify-between text-sm text-white/85">
-          <span>{firstName ? `Hi, ${firstName}` : "Hi there"}</span>
+          <span>{preview ? "Welcome to your MoneyMap demo" : firstName ? `Hi, ${firstName}` : "Hi there"}</span>
           <span>
             {formatDate(o.cycle.start, false)} – {formatDate(o.cycle.end, false)}
           </span>
@@ -349,6 +350,20 @@ function SamplePreviewNote() {
           Clear sample data (Settings)
         </Link>
       </p>
+    </div>
+  );
+}
+
+// Set up with real numbers but sample items still loaded: say so, so sample figures are
+// never mistaken for real ones.
+function SampleMixedNote() {
+  return (
+    <div role="note" className="rounded-2xl border border-accent/30 bg-accent-soft p-3 text-sm">
+      <strong>Sample items are included in these figures</strong> (marked Sample).{" "}
+      <Link href="/settings" className="font-semibold text-accent underline">
+        Clear sample data
+      </Link>{" "}
+      to see only your own.
     </div>
   );
 }
