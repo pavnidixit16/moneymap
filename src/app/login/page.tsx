@@ -1,4 +1,4 @@
-import { CalendarClock, ChartPie, ShieldCheck } from "lucide-react";
+import { CalendarClock, ChartPie, ChevronRight, PlayCircle, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { GoogleButton } from "./google-button";
@@ -37,6 +37,23 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
       <Suspense fallback={<div className="h-12 rounded-full bg-surface-2" aria-hidden />}>
         <SignInAction searchParams={searchParams} />
       </Suspense>
+
+      <div className="flex items-center gap-3 text-xs font-medium text-muted" aria-hidden>
+        <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+      </div>
+      <Link
+        href="/demo"
+        className="flex items-center gap-3 rounded-2xl border-2 border-accent/40 bg-surface p-4 transition-colors hover:border-accent"
+      >
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+          <PlayCircle className="size-5" aria-hidden />
+        </span>
+        <span className="flex flex-1 flex-col">
+          <span className="font-semibold text-accent">Try MoneyMap demo</span>
+          <span className="text-sm text-muted">Explore instantly, no sign-in required. All figures are fictional.</span>
+        </span>
+        <ChevronRight className="size-5 shrink-0 text-muted" aria-hidden />
+      </Link>
 
       <section className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4 text-sm text-muted">
         <h2 className="font-semibold text-foreground">Your privacy</h2>

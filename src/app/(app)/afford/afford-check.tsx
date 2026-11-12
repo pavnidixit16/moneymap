@@ -30,7 +30,15 @@ const TONE: Record<AffordLevel, { icon: typeof Info; box: string; iconClass: str
 const signed = (p: number) => (p < 0 ? `−${formatINR(-p)}` : formatINR(p));
 const minus = (p: number) => (p === 0 ? formatINR(0) : `−${formatINR(p)}`);
 
-export function AffordCheck({ input, next }: { input: AffordInput; next: { items: DueItem[]; end: ISODate; paidEarlyPaise: number } }) {
+export function AffordCheck({
+  input,
+  next,
+  demo = false,
+}: {
+  input: AffordInput;
+  next: { items: DueItem[]; end: ISODate; paidEarlyPaise: number };
+  demo?: boolean; // guest demo: plans can't be saved without an account
+}) {
   const [amount, setAmount] = useState("");
   const [label, setLabel] = useState("");
   const [when, setWhen] = useState<"now" | "after">("now");
@@ -194,17 +202,28 @@ export function AffordCheck({ input, next }: { input: AffordInput; next: { items
           {(planOpen || level === "comfortable") && level !== "incomplete" && paise && (
             <div className="flex flex-col gap-2 rounded-xl bg-surface p-3 text-sm">
               <p className="font-medium">Work towards it, if you&apos;d like</p>
-              <p className="text-muted">Set aside a little each month. You review it under Commitments before anything is saved.</p>
+              <p className="text-muted">
+                {demo
+                  ? "Set aside a little each month. With your own account you can save this as a monthly plan under Commitments."
+                  : "Set aside a little each month. You review it under Commitments before anything is saved."}
+              </p>
               <ul className="flex flex-col gap-1">
                 {PLAN_MONTHS.map((m) => {
                   const monthly = monthlyShare(paise, m);
                   const href = `/commitments/new?type=other&frequency=monthly&name=${encodeURIComponent(`Saving towards ${label.trim() || "a purchase"}`)}&amount=${encodeURIComponent(paiseToInput(monthly))}`;
                   return (
                     <li key={m}>
-                      <Link href={href} className="flex justify-between gap-3 rounded-lg border border-border px-3 py-2 font-semibold">
-                        <span>Over {m} months</span>
-                        <span className="tabular-nums text-accent">{formatINR(monthly)} a month</span>
-                      </Link>
+                      {demo ? (
+                        <div className="flex justify-between gap-3 rounded-lg border border-border px-3 py-2 font-semibold">
+                          <span>Over {m} months</span>
+                          <span className="tabular-nums text-accent">{formatINR(monthly)} a month</span>
+                        </div>
+                      ) : (
+                        <Link href={href} className="flex justify-between gap-3 rounded-lg border border-border px-3 py-2 font-semibold">
+                          <span>Over {m} months</span>
+                          <span className="tabular-nums text-accent">{formatINR(monthly)} a month</span>
+                        </Link>
+                      )}
                     </li>
                   );
                 })}

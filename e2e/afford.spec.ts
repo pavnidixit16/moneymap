@@ -107,11 +107,12 @@ test("fits a 360px phone", async ({ page }) => {
 });
 
 test("after payday: commitments already paid early are explained, never counted twice", async ({ page }) => {
-  // U pays next cycle's SIP today (early).
+  // U pays next cycle's SIP today (early), for its real scheduled date next month.
   execFileSync("psql", ["-h", process.env.PGHOST!, "-p", process.env.PGPORT!, "-U", "postgres", "-d", "mm_e2e", "-v", "ON_ERROR_STOP=1", "-tAc", `
     insert into public.commitment_payments (user_id, commitment_id, due_date, outcome, amount_paise, paid_on)
-    select c.user_id, c.id, (date_trunc('month', c.next_due_date) + interval '2 month - 1 day')::date, 'paid', 1000000, (now() at time zone 'Asia/Kolkata')::date
-    from public.commitments c where c.user_id = '${USERS.u.id}' and c.name = 'SIP';`]);
+    select c.user_id, c.id, private.clamped_date(extract(year from n)::int, extract(month from n)::int, c.anchor_day), 'paid', 1000000, (now() at time zone 'Asia/Kolkata')::date
+    from public.commitments c, lateral (select (c.next_due_date + interval '1 month')::date as n) next_month
+    where c.user_id = '${USERS.u.id}' and c.name = 'SIP';`]);
   await signIn(page, "u");
   await open(page, "/afford");
   await page.getByLabel("How much is it? (₹)").fill("5000");

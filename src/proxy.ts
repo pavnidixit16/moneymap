@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { readSupabaseEnv } from "@/lib/supabase/env";
 
-const PUBLIC_PATHS = ["/login", "/auth/", "/privacy"];
+// "/demo" is the guest demo: in-memory sample data only, no database access at all.
+const PUBLIC_PATHS = ["/login", "/auth/", "/privacy", "/demo"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p));
