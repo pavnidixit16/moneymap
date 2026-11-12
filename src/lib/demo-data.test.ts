@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { guestDemo } from "./demo-data";
+import { demoJourneyStart, guestDemo, newDemoCommitment } from "./demo-data";
 import { payCycle } from "./engine/cycle";
 import type { ISODate } from "./engine/dates";
 import { computeOverview } from "./engine/overview";
@@ -45,9 +45,46 @@ describe("guest demo (no sign-in)", () => {
     const { d } = overviewOn("2026-11-12" as ISODate);
     expect(d.commitments.every((c) => c.is_sample && c.id.startsWith("demo-"))).toBe(true);
     expect(d.transactions.every((t) => t.is_sample && t.id.startsWith("demo-"))).toBe(true);
-    for (const file of ["demo-data.ts", "demo-load.ts"]) {
-      const src = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+    for (const file of ["./demo-data.ts", "../app/demo/demo-journey.tsx", "../app/demo/page.tsx"]) {
+      const src = readFileSync(new URL(file, import.meta.url), "utf8");
       expect(src, file).not.toMatch(/supabase|requireUser|cookies\(/); // type-only imports from ./data are erased
     }
+  });
+});
+
+describe("demo journey: add commitments, see what's left", () => {
+  const today = "2026-11-12" as ISODate;
+  const left = (start: ReturnType<typeof demoJourneyStart>, extra: Parameters<typeof newDemoCommitment>[0][] = []) =>
+    computeOverview({
+      profile: start.profile,
+      transactions: start.spending,
+      commitments: [...start.commitments, ...extra.map((e, i) => newDemoCommitment(e, `x${i}`)!)],
+      payments: [],
+      today,
+    }).remainingPaise;
+
+  it("starts from six commitments and the sample spending, through the real engine", () => {
+    const s = demoJourneyStart(today);
+    expect(s.commitments.map((c) => c.name)).toEqual(["House rent", "Car loan EMI", "Nifty 50 index fund", "Electricity", "Netflix", "HDFC Millennia"]);
+    // 1,00,000 − spending 11,879 − rent 22,000 − electricity 1,800 − Netflix 649 − SIP 5,000; car EMI is after payday,
+    // the card bill is reminder-only.
+    expect(left(s)).toBe(r(100000 - 11879 - 22000 - 1800 - 649 - 5000));
+  });
+
+  it("an added commitment due before payday reduces what's left by its amount", () => {
+    const s = demoJourneyStart(today);
+    expect(left(s, [{ type: "subscription", name: "Gym", amountPaise: r(2000), dueDate: "2026-11-20" }])).toBe(left(s) - r(2000));
+  });
+
+  it("one due after payday, or a reminder-only card bill, doesn't change this estimate", () => {
+    const s = demoJourneyStart(today);
+    expect(left(s, [{ type: "emi", name: "Phone EMI", amountPaise: r(3000), dueDate: "2026-12-05" }])).toBe(left(s));
+    expect(left(s, [{ type: "card", name: "ICICI card", amountPaise: r(9000), dueDate: "2026-11-20" }])).toBe(left(s));
+  });
+
+  it("refuses incomplete entries", () => {
+    expect(newDemoCommitment({ type: "rent", name: " ", amountPaise: r(1000), dueDate: "2026-11-20" }, "a")).toBeNull();
+    expect(newDemoCommitment({ type: "rent", name: "Rent", amountPaise: null, dueDate: "2026-11-20" }, "a")).toBeNull();
+    expect(newDemoCommitment({ type: "rent", name: "Rent", amountPaise: r(1000), dueDate: "" }, "a")).toBeNull();
   });
 });

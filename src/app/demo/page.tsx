@@ -1,33 +1,27 @@
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui";
-import { loadGuestDemo } from "@/lib/demo-load";
-import { DashboardView } from "../(app)/overview/dashboard-view";
+import { demoJourneyStart } from "@/lib/demo-data";
+import { istToday } from "@/lib/engine/dates";
+import { DemoJourney } from "./demo-journey";
 
-async function DemoDashboard() {
-  const d = await loadGuestDemo();
-  return (
-    <DashboardView
-      profile={d.profile}
-      commitments={d.commitments}
-      payments={d.payments}
-      cycleTransactions={d.cycleTransactions}
-      recent={d.transactions.slice(0, 5)}
-      today={d.today}
-      greeting="Your money at a glance"
-      demo
-    />
-  );
+async function Journey() {
+  await connection(); // the example month is dated from today
+  return <DemoJourney start={demoJourneyStart(istToday())} />;
 }
 
-export default function DemoHomePage() {
+export default function DemoPage() {
   return (
     <>
-      <header className="flex items-center justify-between">
-        <p className="text-xl font-bold tracking-tight text-accent">MoneyMap</p>
-        <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">Demo</span>
+      <header className="flex flex-col gap-1">
+        <p className="flex items-center gap-2 text-xl font-bold tracking-tight text-accent">
+          MoneyMap <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold">Demo</span>
+        </p>
+        <h1 className="text-2xl font-semibold">Add your commitments. See what’s left until payday.</h1>
+        <p className="text-sm text-muted">Try it: change the pay, add or remove a commitment, and watch the number update.</p>
       </header>
-      <Suspense fallback={<Skeleton className="h-64" />}>
-        <DemoDashboard />
+      <Suspense fallback={<Skeleton className="h-96" />}>
+        <Journey />
       </Suspense>
     </>
   );

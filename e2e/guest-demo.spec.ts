@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
-import { guestDemo } from "../src/lib/demo-data";
-import { payCycle } from "../src/lib/engine/cycle";
+import { demoJourneyStart } from "../src/lib/demo-data";
 import { istToday } from "../src/lib/engine/dates";
 import { computeOverview } from "../src/lib/engine/overview";
 import { formatINR } from "../src/lib/money";
@@ -19,18 +18,16 @@ const databaseSnapshot = () =>
     (select count(*) from public.commitment_payments), (select count(*) from public.daily_checkins),
     (select count(*) from public.achievements), (select md5(coalesce(string_agg(p::text, ',' order by id), '')) from public.profiles p))`);
 
-// What the real engine says the demo should show today.
-function expectedEstimate() {
-  const today = istToday();
-  const d = guestDemo(today);
-  const cycle = payCycle(d.profile.payday_day, today);
-  const transactions = d.transactions.filter((t) => t.occurred_on >= cycle.start && t.occurred_on <= cycle.end);
-  return formatINR(computeOverview({ profile: d.profile, transactions, commitments: d.commitments, payments: [], today }).remainingPaise);
+// What the real engine says the demo should show today, before the visitor changes anything.
+function expectedLeft(minusRupees = 0) {
+  const start = demoJourneyStart(istToday());
+  const paise = computeOverview({ profile: start.profile, transactions: start.spending, commitments: start.commitments, payments: [], today: start.today }).remainingPaise;
+  return formatINR(paise - minusRupees * 100);
 }
 
 test.describe.configure({ mode: "serial" });
 
-test("a signed-out visitor tries the demo from the login screen: no Google, no account, nothing saved", async ({ page }) => {
+test("a signed-out visitor tries the demo: add commitments, see what's left, no Google, nothing saved", async ({ page }) => {
   await page.context().clearCookies(); // like an incognito window
   const before = databaseSnapshot();
 
@@ -42,40 +39,58 @@ test("a signed-out visitor tries the demo from the login screen: no Google, no a
 
   await expect(page).toHaveURL(/\/demo$/);
   await expect(page.getByRole("note", { name: "Demo mode" })).toContainText("You're exploring MoneyMap with sample data. All figures are fictional.");
-  await expect(text(page, "Your money at a glance")).toBeVisible();
-  await expect(page.getByTestId("estimate")).toHaveText(expectedEstimate());
-  await expect(text(page, "House rent").first()).toBeVisible();
-  // Read-only: no actions that need an account.
-  await expect(page.getByRole("link", { name: /Add expense|Add bill|Smart add/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Add your commitments. See what’s left until payday." })).toBeVisible();
+  const left = page.getByTestId("demo-left");
+  await expect(left).toHaveText(expectedLeft());
 
-  await page.getByRole("navigation", { name: "Demo" }).getByRole("link", { name: "Commitments" }).click();
-  await expect(page).toHaveURL(/\/demo\/commitments/);
-  await expect(text(page, "Next 60 days")).toBeVisible();
-  await expect(text(page, "House rent").first()).toBeVisible();
-  await expect(page.getByRole("listitem").filter({ hasText: "HDFC Millennia" }).first()).toContainText("Reminder only");
-  await expect(page.getByRole("button", { name: /Mark .* paid/ })).toHaveCount(0);
-  await page.getByRole("link", { name: "All", exact: true }).click();
-  await expect(text(page, "Nifty 50 index fund").first()).toBeVisible();
-  await expect(text(page, "SBI fixed deposit")).toBeVisible();
+  const list = page.getByRole("list", { name: "Commitments" });
+  await expect(list.getByRole("listitem")).toHaveCount(6);
+  await expect(list.getByRole("listitem").filter({ hasText: "HDFC Millennia" })).toContainText("Reminder only");
+  await expect(list.getByRole("listitem").filter({ hasText: "Car loan EMI" })).toContainText("after payday");
+  await expect(list.getByRole("listitem").filter({ hasText: "House rent" })).toContainText("before payday Counted");
 
-  await page.getByRole("navigation", { name: "Demo" }).getByRole("link", { name: "Spending" }).click();
-  await expect(page).toHaveURL(/\/demo\/spending/);
-  await expect(text(page, "By category")).toBeVisible();
-  await expect(text(page, "Groceries").first()).toBeVisible();
-  await expect(text(page, "Extra income this cycle: ₹5,000")).toBeVisible();
+  // Add a commitment due today: what's left drops by exactly its amount.
+  const add = async (type: string, name: string, amount: string, due: string) => {
+    await page.getByRole("button", { name: "Add a commitment" }).click();
+    await page.getByLabel("Type").selectOption({ label: type });
+    await page.getByLabel("Name").fill(name);
+    await page.getByLabel("Amount (₹)").fill(amount);
+    await page.getByLabel("Next due date").fill(due);
+    await page.getByRole("button", { name: "Add to my month" }).click();
+  };
+  await add("Subscription", "Gym membership", "2000", istToday());
+  await expect(left).toHaveText(expectedLeft(2000));
+  await expect(page.getByRole("status")).toContainText("Gym membership added: ₹2,000 less left until payday.");
 
-  await page.getByRole("navigation", { name: "Demo" }).getByRole("link", { name: "Afford it?" }).click();
-  await page.getByLabel("How much is it? (₹)").fill("6000");
-  await expect(page.getByRole("region", { name: "Estimate" })).toContainText("Looks manageable");
+  // A card bill is a reminder: never counted twice.
+  await add("Credit card bill (reminder)", "ICICI card", "9000", istToday());
+  await expect(left).toHaveText(expectedLeft(2000));
+  await expect(page.getByRole("status")).toContainText("doesn’t change this estimate");
 
-  await page.getByRole("navigation", { name: "Demo" }).getByRole("link", { name: "Home" }).click();
-  await expect(page.getByTestId("estimate")).toHaveText(expectedEstimate());
+  // Incomplete entries are refused.
+  await page.getByRole("button", { name: "Add a commitment" }).click();
+  await page.getByRole("button", { name: "Add to my month" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Add a name" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  // Remove, change the pay, reset.
+  await page.getByRole("button", { name: "Remove Gym membership" }).click();
+  await expect(left).toHaveText(expectedLeft());
+  await page.getByLabel("Take-home pay (₹)").fill("90000");
+  await expect(left).toHaveText(expectedLeft(10000));
+  await page.getByRole("button", { name: "Reset demo" }).click();
+  await expect(left).toHaveText(expectedLeft());
+  await expect(list.getByRole("listitem")).toHaveCount(6);
 
   // No session was created, and nothing in the database changed.
   expect((await page.context().cookies()).filter((c) => c.name.startsWith("sb-"))).toEqual([]);
   expect(databaseSnapshot()).toBe(before);
 
-  // Exit demo: back to sign-in, nothing left behind.
+  // A reload starts fresh: nothing was kept.
+  await add("Rent", "Second flat", "15000", istToday());
+  await page.reload();
+  await expect(left).toHaveText(expectedLeft());
+
   await page.getByRole("link", { name: "Exit demo" }).click();
   await expect(page).toHaveURL(/\/login$/);
   expect(databaseSnapshot()).toBe(before);
@@ -90,8 +105,7 @@ test("real accounts are untouched, and Google sign-in still leads to the user's 
   await page.context().clearCookies();
   await page.context().addCookies([{ ...sessionCookie("u"), domain: "localhost", path: "/" }]);
   await page.goto("/demo");
-  await expect(text(page, "Your money at a glance")).toBeVisible();
-  await expect(page.getByTestId("estimate")).toHaveText(expectedEstimate());
+  await expect(page.getByTestId("demo-left")).toHaveText(expectedLeft());
 
   await page.goto("/overview");
   await expect(page).toHaveURL(/\/overview$/);
@@ -109,12 +123,22 @@ for (const width of [360, 1280]) {
   test(`login and demo fit a ${width}px screen`, async ({ page }) => {
     await page.setViewportSize({ width, height: width === 360 ? 780 : 900 });
     await page.context().clearCookies();
-    for (const [path, shot] of [["/login", "login"], ["/demo", "demo-home"], ["/demo/commitments", "demo-commitments"], ["/demo/spending", "demo-spending"]] as const) {
+    for (const [path, shot] of [["/login", "login"], ["/demo", "demo"]] as const) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, path).toBeLessThanOrEqual(0);
       if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/${shot}-${width}.png`, fullPage: true });
+    }
+    if (process.env.SCREENSHOT_DIR && width === 360) {
+      await page.getByRole("button", { name: "Add a commitment" }).click();
+      await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/demo-add-form-360.png`, fullPage: true });
+      await page.getByLabel("Name").fill("Gym membership");
+      await page.getByLabel("Amount (₹)").fill("2000");
+      await page.getByLabel("Next due date").fill(istToday());
+      await page.getByRole("button", { name: "Add to my month" }).click();
+      await page.waitForTimeout(1000); // let the smooth scroll to the number finish
+      await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/demo-after-add-360.png` });
     }
   });
 }
